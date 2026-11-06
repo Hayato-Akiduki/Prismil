@@ -1,0 +1,17 @@
+# ビルドでできるもの
+bin/
+obj/
+publish/
+
+# 配布用に作ったインストーラー・更新ファイル（GitHub Releases に載せるので、ソースには入れない）
+Releases/
+
+# Visual Studio / エディタの設定
+.vs/
+*.user
+*.suo
+.vscode/
+
+# 秘密情報を書いたファイルを置いてしまった場合の保険
+*.token
+.env
