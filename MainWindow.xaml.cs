@@ -56,6 +56,21 @@ public partial class MainWindow : Window
     private string _lastMusicStation = "";
     private string _lastSearchQuery = "";
 
+    // 検索の状態
+    /// <summary>検索ボックスで検索したキーワード（ガチャ結果などのときは空）</summary>
+    private string _searchKeyword = "";
+    /// <summary>今の検索結果がどのサイトのものか（null = 全サイト）</summary>
+    private SiteType? _searchSite;
+    /// <summary>サイト別検索の続きを読むための目印</summary>
+    private VideoSearchService.SiteSearchCursor? _siteSearchCursor;
+    /// <summary>全サイト検索の「もっと読み込む」用の目印（サイトごと）</summary>
+    private readonly List<VideoSearchService.SiteSearchCursor> _allSearchCursors = [];
+    /// <summary>新しい検索を始めるたびに増やす。古い検索の結果が後から届いても捨てるため</summary>
+    private int _searchGeneration;
+    private bool _isSearching;
+    private bool _isLoadingMore;
+    private bool _syncingSiteSelection;
+
     private WindowState _prevWindowState;
     private WindowStyle _prevWindowStyle;
     private double _prevLeft;
@@ -238,23 +253,75 @@ public partial class MainWindow : Window
         _siteSelectionChanged = true;
     }
 
-    /// <summary>左の「SITE FILTER」から、読み込まないサイトを隠す</summary>
+    private (SiteType Site, RadioButton Radio)[] SiteFilterRadios() =>
+    [
+        (SiteType.YouTube, FilterYouTube), (SiteType.Niconico, FilterNiconico),
+        (SiteType.Bilibili, FilterBilibili), (SiteType.SoundCloud, FilterSoundCloud),
+        (SiteType.Twitch, FilterTwitch), (SiteType.Abema, FilterAbema),
+        (SiteType.Dailymotion, FilterDailymotion), (SiteType.Podcast, FilterPodcast),
+        (SiteType.Radio, FilterRadio),
+    ];
+
+    /// <summary>左の SITE FILTER で選ばれているサイト（「すべて表示」なら null）</summary>
+    private SiteType? SelectedSiteFilter()
+    {
+        foreach (var (site, radio) in SiteFilterRadios())
+            if (radio.IsChecked == true) return site;
+        return null;
+    }
+
+    private static string SiteLabel(SiteType site) =>
+        SiteToggleDefs.FirstOrDefault(d => d.Site == site).Label ?? site.ToString();
+
+    /// <summary>左の「SITE FILTER」と検索ボックス横のサイト選択から、読み込まないサイトを隠す</summary>
     private void UpdateSiteFilterVisibility()
     {
-        var filters = new (SiteType Site, RadioButton Radio)[]
-        {
-            (SiteType.YouTube, FilterYouTube), (SiteType.Niconico, FilterNiconico),
-            (SiteType.Bilibili, FilterBilibili), (SiteType.SoundCloud, FilterSoundCloud),
-            (SiteType.Twitch, FilterTwitch), (SiteType.Abema, FilterAbema),
-            (SiteType.Dailymotion, FilterDailymotion), (SiteType.Podcast, FilterPodcast),
-            (SiteType.Radio, FilterRadio),
-        };
-        foreach (var (site, radio) in filters)
+        foreach (var (site, radio) in SiteFilterRadios())
         {
             bool on = _searchService.IsSiteEnabled(site);
             radio.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
             if (!on && radio.IsChecked == true) FilterAll.IsChecked = true;
         }
+        RebuildSearchSiteCombo();
+    }
+
+    /// <summary>検索ボックス横の「検索するサイト」の選択肢を作り直す</summary>
+    private void RebuildSearchSiteCombo()
+    {
+        _syncingSiteSelection = true;
+        try
+        {
+            SearchSiteCombo.Items.Clear();
+            SearchSiteCombo.Items.Add(new ComboBoxItem { Content = "すべてのサイト", Tag = FilterAll });
+            foreach (var (site, radio) in SiteFilterRadios())
+            {
+                if (!_searchService.IsSiteEnabled(site)) continue;
+                SearchSiteCombo.Items.Add(new ComboBoxItem { Content = SiteLabel(site), Tag = radio });
+            }
+        }
+        finally { _syncingSiteSelection = false; }
+        SyncSearchSiteComboFromFilter();
+    }
+
+    /// <summary>左の SITE FILTER の選択を、検索ボックス横のサイト選択に反映する</summary>
+    private void SyncSearchSiteComboFromFilter()
+    {
+        _syncingSiteSelection = true;
+        try
+        {
+            var item = SearchSiteCombo.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => i.Tag is RadioButton r && r.IsChecked == true);
+            SearchSiteCombo.SelectedItem = item ?? SearchSiteCombo.Items.OfType<ComboBoxItem>().FirstOrDefault();
+        }
+        finally { _syncingSiteSelection = false; }
+    }
+
+    /// <summary>検索ボックス横でサイトを選んだら、左の SITE FILTER も同じサイトにする（検索し直しはそちらで行う）</summary>
+    private void SearchSiteCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingSiteSelection) return;
+        if (SearchSiteCombo.SelectedItem is ComboBoxItem { Tag: RadioButton radio } && radio.IsChecked != true)
+            radio.IsChecked = true;
     }
 
     /// <summary>今見ている一覧が通信で取ってきたものなら読み込み直す（お気に入り等の保存済み一覧はそのまま）</summary>
@@ -589,7 +656,7 @@ public partial class MainWindow : Window
             RefreshDisplayedCards();
     }
 
-    private async Task ExecuteSearchAsync(string query)
+    private async Task ExecuteSearchAsync(string query, bool rememberQuery = true)
     {
         query = query.Trim();
         if (string.IsNullOrEmpty(query)) return;
@@ -602,7 +669,7 @@ public partial class MainWindow : Window
         }
 
         _lastSearchQuery = query;
-        _libraryService.AddRecentSearch(query);
+        if (rememberQuery) _libraryService.AddRecentSearch(query);
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
 
@@ -614,22 +681,124 @@ public partial class MainWindow : Window
             return;
         }
 
-        NavSearch.IsChecked = true;
-        SwitchToCardBrowserView();
+        // 左の SITE FILTER（または検索ボックス横の選択）で1サイトを選んでいれば、そのサイトだけを検索する
+        var site = SelectedSiteFilter();
+        int generation = ++_searchGeneration;
+        _searchKeyword = query;
+        _searchSite = site;
+        _siteSearchCursor = null;
+        _allSearchCursors.Clear();
 
-        ShowLoadingOverlay(
-            $"「{query}」を7サイト横断検索中...",
-            "YouTube・ニコニコ・SoundCloud・bilibili・Twitch・ABEMA・Dailymotion を同時検索しています");
+        _isSearching = true;
+        List<VideoItem> results;
+        try
+        {
+            NavSearch.IsChecked = true;
+            SwitchToCardBrowserView();
 
-        var results = _shortsFilterMode == 1
-            ? await _searchService.SearchAllShortsAsync(query, limitPerSite: 15)
-            : await _searchService.SearchAllAsync(query, limitPerSite: 10);
+            if (site is SiteType s)
+            {
+                ShowLoadingOverlay(
+                    $"「{query}」を{SiteLabel(s)}で検索中...",
+                    $"{SiteLabel(s)} の検索結果だけを表示します");
+                _siteSearchCursor = new VideoSearchService.SiteSearchCursor(s, query, shortsOnly: _shortsFilterMode == 1);
+                results = await _searchService.SearchSiteNextPageAsync(_siteSearchCursor);
+            }
+            else
+            {
+                ShowLoadingOverlay(
+                    $"「{query}」を全サイトで検索中...",
+                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch・ABEMA・Dailymotion などを同時に検索しています");
+                results = _shortsFilterMode == 1
+                    ? await _searchService.SearchAllShortsAsync(query, limitPerSite: 20)
+                    : await _searchService.SearchAllAsync(query, limitPerSite: 20);
+            }
+        }
+        finally
+        {
+            _isSearching = false;
+        }
+
+        // 待っている間に別の検索が始まっていたら、この結果は使わない
+        if (generation != _searchGeneration) return;
+
         _libraryService.SyncCollectionFlags(results);
         _searchItems = results;
         NavSearch.Tag = results.Count > 0 ? results.Count.ToString() : null;
 
         HideLoadingOverlay();
         RefreshDisplayedCards();
+    }
+
+    /// <summary>検索結果の続きを読めるか</summary>
+    private bool CanLoadMoreSearch()
+    {
+        if (string.IsNullOrEmpty(_searchKeyword) || _lastSearchQuery != _searchKeyword) return false;
+        if (_siteSearchCursor != null) return _siteSearchCursor.HasMore;
+        return _allSearchCursors.Count == 0 || _allSearchCursors.Any(c => c.HasMore);
+    }
+
+    /// <summary>検索結果の続き（次のページ）を読み込んで、一覧の後ろに足す</summary>
+    private async Task LoadMoreSearchResultsAsync()
+    {
+        if (_isLoadingMore || _isSearching || !CanLoadMoreSearch()) return;
+        _isLoadingMore = true;
+        int generation = _searchGeneration;
+        LoadMoreButton.IsEnabled = false;
+        LoadMoreButton.Content = "読み込み中...";
+        try
+        {
+            var more = _siteSearchCursor != null
+                ? await _searchService.SearchSiteNextPageAsync(_siteSearchCursor)
+                : await _searchService.SearchAllNextPageAsync(
+                    _searchKeyword, _allSearchCursors, _searchItems, shortsOnly: _shortsFilterMode == 1);
+            if (generation != _searchGeneration) return;
+
+            _libraryService.SyncCollectionFlags(more);
+            _searchItems = [.. _searchItems, .. more];
+            NavSearch.Tag = _searchItems.Count > 0 ? _searchItems.Count.ToString() : null;
+            RefreshDisplayedCards();
+        }
+        finally
+        {
+            _isLoadingMore = false;
+            LoadMoreButton.IsEnabled = true;
+            LoadMoreButton.Content = "▼ もっと読み込む";
+            UpdateLoadMoreButton();
+        }
+    }
+
+    private async void LoadMoreButton_Click(object sender, RoutedEventArgs e) =>
+        await LoadMoreSearchResultsAsync();
+
+    /// <summary>検索結果を一番下近くまでスクロールしたら、続きを自動で読み込む</summary>
+    private async void CardsScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, CardsScrollViewer)) return; // 中の部品のスクロールは無視
+        if (e.VerticalChange <= 0) return; // 下方向へのスクロールのときだけ
+        if (LoadMoreButton.Visibility != Visibility.Visible) return;
+        if (e.VerticalOffset + e.ViewportHeight < e.ExtentHeight - 400) return;
+        await LoadMoreSearchResultsAsync();
+    }
+
+    private void UpdateLoadMoreButton()
+    {
+        bool inSearch = NavSearch.IsChecked == true && _activeCustomPlaylist == null && _activeSubscribedChannel == null;
+        LoadMoreButton.Visibility = inSearch && _searchItems.Count > 0 && CanLoadMoreSearch()
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 検索画面で SITE FILTER を切り替えたら、そのサイト（または全サイト）で検索し直す。
+    /// 表示だけ絞り込むと、全サイト検索で取れた少しの件数しか出ないため。
+    /// </summary>
+    private async Task<bool> ResearchIfSiteChangedAsync()
+    {
+        if (_isSearching || NavSearch.IsChecked != true) return false;
+        if (string.IsNullOrEmpty(_searchKeyword) || _lastSearchQuery != _searchKeyword) return false;
+        if (SelectedSiteFilter() == _searchSite) return false;
+        await ExecuteSearchAsync(_searchKeyword, rememberQuery: false);
+        return true;
     }
 
     // =========================================================================
@@ -679,7 +848,9 @@ public partial class MainWindow : Window
             source = _searchItems;
             headerTitle = string.IsNullOrEmpty(_lastSearchQuery)
                 ? "🔍 横断検索結果"
-                : $"🔍 「{_lastSearchQuery}」の横断検索結果";
+                : _searchSite is SiteType ss && _lastSearchQuery == _searchKeyword
+                    ? $"🔍 「{_lastSearchQuery}」の{SiteLabel(ss)}検索結果"
+                    : $"🔍 「{_lastSearchQuery}」の横断検索結果";
         }
         else if (NavFavorites.IsChecked == true)
         {
@@ -750,6 +921,7 @@ public partial class MainWindow : Window
         ViewHeaderCount.Text = $"{finalList.Count} 件";
 
         BtnClearHistory.Visibility = showClearHistory ? Visibility.Visible : Visibility.Collapsed;
+        UpdateLoadMoreButton();
         BtnPlayAllPlaylist.Visibility = isCustomPlaylist && finalList.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         BtnDeletePlaylist.Visibility = isCustomPlaylist ? Visibility.Visible : Visibility.Collapsed;
         BtnUnsubscribeChannel.Visibility = isSingleChannel && _activeSubscribedChannel != null &&
@@ -1450,6 +1622,7 @@ public partial class MainWindow : Window
         }
         else
         {
+            if (await ResearchIfSiteChangedAsync()) return;
             RefreshDisplayedCards();
         }
     }
@@ -1529,9 +1702,11 @@ public partial class MainWindow : Window
         SwitchToPlayerView();
     }
 
-    private void SiteFilter_Checked(object sender, RoutedEventArgs e)
+    private async void SiteFilter_Checked(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded) return;
+        SyncSearchSiteComboFromFilter();
+        if (await ResearchIfSiteChangedAsync()) return;
         RefreshDisplayedCards();
     }
 
@@ -2108,6 +2283,12 @@ public partial class MainWindow : Window
 
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
+        // ガチャはキーワード検索ではないので、続きの読み込みやサイト別の再検索はしない
+        ++_searchGeneration;
+        _searchKeyword = "";
+        _searchSite = null;
+        _siteSearchCursor = null;
+        _allSearchCursors.Clear();
         FilterAll.IsChecked = true;
         NavSearch.IsChecked = true;
         SwitchToCardBrowserView();

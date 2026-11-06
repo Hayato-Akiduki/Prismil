@@ -481,6 +481,7 @@
                                 <ColumnDefinition Width="34"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="🔍" FontSize="13.5" Foreground="#9AA4B5"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -496,7 +497,12 @@
                                            Foreground="#9AA4B5" FontSize="12" VerticalAlignment="Center"
                                            IsHitTestVisible="False"/>
                             </Grid>
-                            <Button Grid.Column="2" Content="検索" Style="{StaticResource PrimaryBtn}"
+                            <!-- 検索するサイトの選択（左の SITE FILTER と連動） -->
+                            <ComboBox x:Name="SearchSiteCombo" Grid.Column="2" Width="128" Height="28" Margin="4,0,0,0"
+                                      VerticalContentAlignment="Center" FontSize="12"
+                                      SelectionChanged="SearchSiteCombo_SelectionChanged"
+                                      ToolTip="検索するサイトを選ぶ（1サイトだけにすると、そのサイトの結果を多めに表示します）"/>
+                            <Button x:Name="SearchButton" Grid.Column="3" Content="検索" Style="{StaticResource PrimaryBtn}"
                                     Margin="4,4,5,4" Padding="12,0" Click="SearchButton_Click"/>
                         </Grid>
                     </Border>
@@ -713,7 +719,9 @@
 
                     <!-- カードグリッド一覧 -->
                     <Grid Grid.Row="1">
-                        <ScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto" Padding="20,4,20,28">
+                        <ScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto" Padding="20,4,20,28"
+                                      ScrollChanged="CardsScrollViewer_ScrollChanged">
+                            <StackPanel>
                             <ItemsControl x:Name="VideoCardsControl">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -814,6 +822,11 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <!-- 検索結果の続きを読み込む（下までスクロールしても自動で読み込む） -->
+                            <Button x:Name="LoadMoreButton" Content="▼ もっと読み込む" Style="{StaticResource ActionBtn}"
+                                    HorizontalAlignment="Center" Margin="0,14,0,0" Padding="22,8"
+                                    Visibility="Collapsed" Click="LoadMoreButton_Click"/>
+                            </StackPanel>
                         </ScrollViewer>
 
                         <!-- ローディング＆空状態メッセージ -->
