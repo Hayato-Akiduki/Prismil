@@ -14,14 +14,26 @@ public static class PrismilPlayer
 {
     public const string HostName = "player.prismil.local";
 
-    /// <summary>プレイヤー画面のファイルを置き、WebView2 から https://player.prismil.local/ で開けるようにする</summary>
-    public static void Install(Microsoft.Web.WebView2.Core.CoreWebView2 core, string dataRoot)
+    /// <summary>
+    /// WebView2 から https://player.prismil.local/player.html を開けるようにする。
+    /// 以前はファイルに書き出してフォルダを割り当てていたが、新しい WebView2 ではそのファイルの読み込みが
+    /// 「ERR_ACCESS_DENIED」で拒否され、どの動画も再生できなくなった。そこでファイルを使わず、メモリ上の HTML をそのまま返す。
+    /// </summary>
+    public static void Install(Microsoft.Web.WebView2.Core.CoreWebView2 core,
+                               Microsoft.Web.WebView2.Core.CoreWebView2Environment env)
     {
-        var dir = Path.Combine(dataRoot, "Player");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "player.html"), ShellHtml);
-        core.SetVirtualHostNameToFolderMapping(
-            HostName, dir, Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
+        var html = System.Text.Encoding.UTF8.GetBytes(ShellHtml);
+        core.AddWebResourceRequestedFilter($"https://{HostName}/*",
+            Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += (_, e) =>
+        {
+            if (!IsPlayerUrl(e.Request.Uri)) return;
+            var path = new Uri(e.Request.Uri).AbsolutePath;
+            e.Response = path.Equals("/player.html", StringComparison.OrdinalIgnoreCase)
+                ? env.CreateWebResourceResponse(new MemoryStream(html), 200, "OK",
+                    "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store")
+                : env.CreateWebResourceResponse(Stream.Null, 404, "Not Found", "");
+        };
     }
 
     public static bool IsPlayerUrl(string? url) =>
@@ -53,9 +65,9 @@ public static class PrismilPlayer
                 if (!Regex.IsMatch(id, @"^(sm|so|nm)\d+$", RegexOptions.IgnoreCase)) return null;
                 return $"https://embed.nicovideo.jp/watch/{id}?autoplay=1";
 
-            case SiteType.Bilibili:
-                if (!Regex.IsMatch(id, @"^BV[0-9A-Za-z]{10}$")) return null;
-                return $"https://player.bilibili.com/player.html?bvid={id}&autoplay=1&high_quality=1&danmaku=0";
+            // bilibili の埋め込みプレイヤー（player.bilibili.com）は、日本から開くとどの動画も
+            // 「非常抱歉 本视频可能由于以下原因导致无法正常播放」という17秒の案内動画に差し替えられて再生できない。
+            // 通常の視聴ページなら再生できるので、今まで通りの表示（視聴ページ＋Zenモード）にする
 
             case SiteType.Twitch:
                 if (item.WatchUrl.Contains("/videos/", StringComparison.OrdinalIgnoreCase))
@@ -222,6 +234,8 @@ public static class PrismilPlayer
     window[n] = (...args) => post(activeWin || frame.contentWindow, { __prismil: 'call', name: n, args });
   }
   const cmd = (op, value) => post(activeWin || frame.contentWindow, { __prismil: 'cmd', op, value });
+  // アプリのコメント一覧から、コメントの場面へ移動する
+  window.prismilSeekTo = (sec) => { if (isFinite(sec)) cmd('seek', sec); };
   // ---- 状態 ----
   let st = { t: 0, d: 0, paused: true, vol: 1, muted: false };
   let hasVideo = false;
@@ -378,6 +392,8 @@ public static class PrismilPlayer
     else if (k === 'arrowdown') { cmd('volume', Math.max(0, (st.muted ? 0 : st.vol) - 0.05)); }
     else if (k === 'm') { cmd('toggleMute'); }
     else if (k === 'f') { toggleFs(); }
+    else if (k === 't') { toHost('theater_toggle'); }
+    else if (k === 'escape' && !document.fullscreenElement) { toHost('theater_exit'); }
     else if (k >= '0' && k <= '9' && isFinite(st.d) && st.d > 0) { cmd('seek', st.d * Number(k) / 10); }
     else return;
     e.preventDefault();

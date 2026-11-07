@@ -87,6 +87,13 @@ public class VideoItem : INotifyPropertyChanged
     [JsonIgnore]
     public string UniqueKey => $"{Site}:{Id}";
 
+    /// <summary>「次に再生」の欄に出ている理由（🔍 検索・一覧 / ✨ おすすめ）。保存はしない</summary>
+    [JsonIgnore]
+    public string QueueReason { get; set; } = "";
+
+    [JsonIgnore]
+    public bool HasQueueReason => QueueReason.Length > 0;
+
     [JsonIgnore]
     public bool IsShortVideo =>
         (DurationSeconds > 0 && DurationSeconds <= 62) ||

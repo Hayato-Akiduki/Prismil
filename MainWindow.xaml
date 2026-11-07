@@ -2,11 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:svc="clr-namespace:ZenTube.Services"
         Title="Prismil" Icon="Assets/prismil.ico" Height="880" Width="1440" MinWidth="820" MinHeight="520"
         Background="#0D0F14" Foreground="#F1F5F9"
         FontFamily="Segoe UI Variable Text, Yu Gothic UI, Meiryo UI">
 
     <Window.Resources>
+        <!-- サムネイルを表示サイズに縮めて読み込む -->
+        <svc:ThumbnailConverter x:Key="ThumbConverter"/>
         <!-- 左ナビゲーションのメニューボタン -->
         <Style x:Key="NavMenuButton" TargetType="RadioButton">
             <Setter Property="Foreground" Value="#94A3B8"/>
@@ -53,7 +56,7 @@
             </Setter>
         </Style>
 
-        <!-- サイトフィルターボタン -->
+        <!-- 「サイト別に見る」のボタン -->
         <Style x:Key="SiteFilterRadio" TargetType="RadioButton">
             <Setter Property="Foreground" Value="#94A3B8"/>
             <Setter Property="FontSize" Value="12.5"/>
@@ -324,22 +327,15 @@
                     <Border Background="#0AFFFFFF" BorderBrush="#1AFFFFFF" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,6">
                         <StackPanel>
                             <TextBlock Text="🔒 ログイン不要・ローカル完結" Foreground="#34D399" FontSize="10.5" FontWeight="Bold"/>
-                            <TextBlock Text="チャンネル登録・履歴はこのPCのみに保存" Foreground="#9AA4B5" FontSize="9.5" Margin="0,2,0,6"/>
-                            <UniformGrid Columns="2">
-                                <Button x:Name="BtnClearCookies" Content="🧹 Cookie消去" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,3,0" Padding="4,3" FontSize="10.5" Click="ClearCookies_Click"
-                                        ToolTip="WebView内のCookie・ログイン状態・キャッシュを完全リセット"/>
-                                <Button Content="📂 データ場所" Style="{StaticResource ActionBtn}"
-                                        Margin="3,0,0,0" Padding="4,3" FontSize="10.5" Click="OpenLocalDataFolder_Click"
-                                        ToolTip="このPC内のデータ保存フォルダ (library.json) を開く"/>
-                            </UniformGrid>
+                            <TextBlock Text="チャンネル登録・履歴はこのPCのみに保存（消去などは ⚙ 設定 から）" Foreground="#9AA4B5" FontSize="9.5"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                     <TextBlock Foreground="#7C8798" FontSize="10" Text="Ctrl+B: メニュー / Ctrl+L: 検索 / Ctrl+M: ミニ窓 / F11: 全画面"
                                HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <!-- 中央スクロール領域（ナビ・マイプレイリスト・サイトフィルター） -->
+                <!-- 中央スクロール領域（ナビ・マイプレイリスト・サイト別に見る） -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="DISCOVER" Foreground="#7C8798" FontSize="10.5"
@@ -362,6 +358,8 @@
                         <RadioButton x:Name="NavHistory" Content="📜  視聴履歴"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
                         <RadioButton x:Name="NavStats" Content="📊  視聴統計・分析"
+                                     Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
+                        <RadioButton x:Name="NavSettings" Content="⚙  設定"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
 
                         <!-- ローカル登録チャンネル一覧 -->
@@ -414,10 +412,12 @@
                             </Grid>
                         </Border>
 
-                        <!-- サイト絞り込みフィルター -->
-                        <TextBlock Text="SITE FILTER (9ソース対応)" Foreground="#7C8798" FontSize="10.5"
-                                   FontWeight="Bold" Margin="20,12,0,2"/>
-                        <RadioButton x:Name="FilterAll" Content="すべて表示 (9ソース)" Tag="#818CF8"
+                        <!-- サイト別に見る（選んだサイトの検索結果・おすすめだけを表示） -->
+                        <TextBlock Text="🌐 サイト別に見る" Foreground="#AEB8C8" FontSize="12"
+                                   FontWeight="Bold" Margin="20,14,0,0"/>
+                        <TextBlock Text="サイトを選ぶと、そのサイトの動画を見るモードになります（ABEMA はここでだけ表示）" Foreground="#7C8798" FontSize="10.5"
+                                   TextWrapping="Wrap" Margin="20,2,12,4"/>
+                        <RadioButton x:Name="FilterAll" Content="すべてのサイト" Tag="#818CF8"
                                      Style="{StaticResource SiteFilterRadio}" GroupName="SiteFilter" IsChecked="True" Checked="SiteFilter_Checked"/>
                         <RadioButton x:Name="FilterYouTube" Content="YouTube" Tag="#FF0033"
                                      Style="{StaticResource SiteFilterRadio}" GroupName="SiteFilter" Checked="SiteFilter_Checked"/>
@@ -434,8 +434,6 @@
                         <RadioButton x:Name="FilterTwitch" Content="Twitch (生配信/動画)" Tag="#9146FF"
                                      Style="{StaticResource SiteFilterRadio}" GroupName="SiteFilter" Checked="SiteFilter_Checked"/>
                         <RadioButton x:Name="FilterAbema" Content="ABEMA (TV/見逃し)" Tag="#00B94B"
-                                     Style="{StaticResource SiteFilterRadio}" GroupName="SiteFilter" Checked="SiteFilter_Checked"/>
-                        <RadioButton x:Name="FilterDailymotion" Content="Dailymotion (海外/MV)" Tag="#0066FF"
                                      Style="{StaticResource SiteFilterRadio}" GroupName="SiteFilter" Checked="SiteFilter_Checked"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -497,11 +495,11 @@
                                            Foreground="#9AA4B5" FontSize="12" VerticalAlignment="Center"
                                            IsHitTestVisible="False"/>
                             </Grid>
-                            <!-- 検索するサイトの選択（左の SITE FILTER と連動） -->
+                            <!-- 検索するサイトの選択（左の「サイト別に見る」と連動） -->
                             <ComboBox x:Name="SearchSiteCombo" Grid.Column="2" Width="128" Height="28" Margin="4,0,0,0"
                                       VerticalContentAlignment="Center" FontSize="12"
                                       SelectionChanged="SearchSiteCombo_SelectionChanged"
-                                      ToolTip="検索するサイトを選ぶ（1サイトだけにすると、そのサイトの結果を多めに表示します）"/>
+                                      ToolTip="検索するサイトを選ぶ（左の「サイト別に見る」と同じ。1サイトにすると、そのサイトの結果だけを多めに表示します）"/>
                             <Button x:Name="SearchButton" Grid.Column="3" Content="検索" Style="{StaticResource PrimaryBtn}"
                                     Margin="4,4,5,4" Padding="12,0" Click="SearchButton_Click"/>
                         </Grid>
@@ -536,27 +534,11 @@
                                             ToolTip="音楽専用ステーション＆バックグラウンド連続再生モードへ切替"/>
                                     <Button x:Name="BtnGacha" Content="🎲 動画ガチャ" Style="{StaticResource MenuRowBtn}"
                                             Click="VideoGacha_Click"
-                                            ToolTip="7サイトからランダムなテーマで面白い動画・音楽・配信を10連抽選して発掘！"/>
+                                            ToolTip="5サイトからランダムなテーマで面白い動画・音楽・配信を10連抽選して発掘！"/>
 
-                                    <Border Height="1" Background="#14FFFFFF" Margin="6,5"/>
-
-                                    <Button x:Name="BtnBlockShorts" Content="🚫 ショート除外: ON" Style="{StaticResource MenuRowBtn}"
-                                            Click="BlockShortsToggle_Click"
-                                            ToolTip="1分以下のショート動画や #shorts 動画・縦型無限スクロール棚を一覧とサイト内から除外 (クリックで切替)"/>
-                                    <Button x:Name="BtnAdBlock" Content="🛡 広告ブロック: ON (0)" Style="{StaticResource MenuRowBtn}"
-                                            Click="AdBlockToggle_Click"
-                                            ToolTip="広告・トラッカー遮断 ＆ 動画広告の自動スキップ・高速早送り (クリックでON/OFF)"/>
-                                    <Button x:Name="BtnPinTopmost" Content="📌 最前面: OFF" Style="{StaticResource MenuRowBtn}"
-                                            Click="PinTopmost_Click" ToolTip="ウィンドウを常に手前に表示"/>
-
-                                    <Border Height="1" Background="#14FFFFFF" Margin="6,5"/>
-
-                                    <!-- 読み込むサイトの選択（OFFのサイトには通信しないので軽くなる） -->
-                                    <TextBlock Text="読み込むサイト" Foreground="#9AA4B5" FontSize="11" FontWeight="SemiBold"
-                                               Margin="10,4,0,4"/>
-                                    <UniformGrid x:Name="SiteToggleGrid" Columns="2" Margin="4,0,4,2"/>
-                                    <TextBlock Text="メニューを閉じると読み込み直します" Foreground="#7C8798" FontSize="10.5"
-                                               Margin="10,2,0,4"/>
+                                    <Button x:Name="BtnOpenSettings" Content="⚙ 設定" Style="{StaticResource MenuRowBtn}"
+                                            Click="OpenSettings_Click"
+                                            ToolTip="再生・映像と音・一覧・広告・データなどの細かい設定"/>
 
                                     <Border Height="1" Background="#14FFFFFF" Margin="6,5"/>
 
@@ -575,9 +557,6 @@
                                         </ComboBox>
                                         <TextBlock Text="🌙 スリープタイマー" Foreground="#E2E8F0" FontSize="12.5" VerticalAlignment="Center"/>
                                     </DockPanel>
-
-                                    <TextBlock x:Name="AppVersionText" Text="Prismil" Foreground="#7C8798" FontSize="10.5"
-                                               HorizontalAlignment="Right" Margin="0,8,8,2"/>
                                 </StackPanel>
                             </Border>
                         </Popup>
@@ -689,7 +668,7 @@
                         <!-- トピックワンクリック検索チップ ＋ 最近の検索ワード履歴 -->
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="🔥 7サイト総合" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag=""/>
+                                <Button Content="🔥 5サイト総合" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag=""/>
                                 <Button Content="☁ SoundCloud 音楽" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="SoundCloud"/>
                                 <Button Content="🔴 Twitch 生配信" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Twitch"/>
                                 <Button Content="📺 ABEMA 放送中" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Abema"/>
@@ -719,115 +698,139 @@
 
                     <!-- カードグリッド一覧 -->
                     <Grid Grid.Row="1">
-                        <ScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto" Padding="20,4,20,28"
-                                      ScrollChanged="CardsScrollViewer_ScrollChanged">
-                            <StackPanel>
-                            <ItemsControl x:Name="VideoCardsControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <!-- 一覧は「行」単位で、画面に見えている行だけを作る（仮想化）。件数が多くても軽く保つため -->
+                            <ItemsControl x:Name="VideoCardsControl" Padding="20,4,20,12"
+                                          VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                          VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True"
+                                          SizeChanged="VideoCardsControl_SizeChanged">
+                                <ItemsControl.Template>
+                                    <ControlTemplate TargetType="ItemsControl">
+                                        <ScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto"
+                                                      CanContentScroll="True" Focusable="False" Padding="{TemplateBinding Padding}">
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </ControlTemplate>
+                                </ItemsControl.Template>
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal"/>
+                                        <VirtualizingStackPanel/>
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <!-- 個別動画カード -->
-                                        <Border Width="278" Margin="6,8" CornerRadius="12"
-                                                Background="#0DFFFFFF" BorderBrush="#00000000" BorderThickness="1">
-                                            <StackPanel>
-                                                <!-- サムネイル領域 (クリックで再生) -->
-                                                <Button Cursor="Hand" Click="PlayVideoCard_Click" Tag="{Binding}"
-                                                        Background="Transparent" BorderThickness="0" Padding="0">
-                                                    <Button.Template>
-                                                        <ControlTemplate TargetType="Button">
-                                                            <Border CornerRadius="11,11,0,0" ClipToBounds="True" Height="156" Background="#33000000">
-                                                                <Grid>
-                                                                    <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"/>
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <!-- 個別動画カード -->
+                                                <Border Width="278" Margin="6,8" CornerRadius="12"
+                                                        Background="#0DFFFFFF" BorderBrush="#00000000" BorderThickness="1">
+                                                    <StackPanel>
+                                                        <!-- サムネイル領域 (クリックで再生) -->
+                                                        <Button Cursor="Hand" Click="PlayVideoCard_Click" Tag="{Binding}"
+                                                                Background="Transparent" BorderThickness="0" Padding="0">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border CornerRadius="11,11,0,0" ClipToBounds="True" Height="156" Background="#33000000">
+                                                                        <Grid>
+                                                                            <Image Source="{Binding ThumbnailUrl, Converter={StaticResource ThumbConverter}, ConverterParameter=440}" Stretch="UniformToFill"/>
 
-                                                                    <!-- 左上：サイトバッジ -->
-                                                                    <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                                            Margin="8,8,0,0" CornerRadius="6" Padding="8,3"
-                                                                            Background="{Binding SiteBadgeBrush}">
-                                                                        <TextBlock Text="{Binding SiteDisplayName}" Foreground="White"
-                                                                                   FontSize="10.5" FontWeight="Bold"/>
+                                                                            <!-- 左上：サイトバッジ -->
+                                                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                                                    Margin="8,8,0,0" CornerRadius="6" Padding="8,3"
+                                                                                    Background="{Binding SiteBadgeBrush}">
+                                                                                <TextBlock Text="{Binding SiteDisplayName}" Foreground="White"
+                                                                                           FontSize="10.5" FontWeight="Bold"/>
+                                                                            </Border>
+
+                                                                            <!-- 右下：再生時間 -->
+                                                                            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                                                    Margin="0,0,8,8" CornerRadius="5" Padding="6,2"
+                                                                                    Background="#CC000000">
+                                                                                <TextBlock Text="{Binding DurationText}" Foreground="White"
+                                                                                           FontSize="11" FontWeight="SemiBold"/>
+                                                                            </Border>
+
+                                                                            <!-- ホバー時の再生オーバーレイ -->
+                                                                            <Border x:Name="HoverOverlay" Background="#55000000" Opacity="0">
+                                                                                <Border Width="46" Height="46" CornerRadius="23" Background="#DD4F46E5"
+                                                                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                                    <TextBlock Text="▶" Foreground="White" FontSize="18"
+                                                                                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0"/>
+                                                                                </Border>
+                                                                            </Border>
+                                                                        </Grid>
                                                                     </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
 
-                                                                    <!-- 右下：再生時間 -->
-                                                                    <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                                            Margin="0,0,8,8" CornerRadius="5" Padding="6,2"
-                                                                            Background="#CC000000">
-                                                                        <TextBlock Text="{Binding DurationText}" Foreground="White"
-                                                                                   FontSize="11" FontWeight="SemiBold"/>
-                                                                    </Border>
+                                                        <!-- テキスト＆アクション領域 -->
+                                                        <StackPanel Margin="12,10,12,12">
+                                                            <TextBlock Text="{Binding Title}" Foreground="#F1F5F9" FontSize="13.5"
+                                                                       FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="38"
+                                                                       TextTrimming="CharacterEllipsis" Height="38"
+                                                                       ToolTip="{Binding Title}" Cursor="Hand"
+                                                                       MouseLeftButtonUp="VideoTitle_MouseLeftButtonUp" Tag="{Binding}"/>
 
-                                                                    <!-- ホバー時の再生オーバーレイ -->
-                                                                    <Border x:Name="HoverOverlay" Background="#55000000" Opacity="0">
-                                                                        <Border Width="46" Height="46" CornerRadius="23" Background="#DD4F46E5"
-                                                                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                                            <TextBlock Text="▶" Foreground="White" FontSize="18"
-                                                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0"/>
-                                                                        </Border>
-                                                                    </Border>
-                                                                </Grid>
-                                                            </Border>
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
-                                                        </ControlTemplate>
-                                                    </Button.Template>
-                                                </Button>
-
-                                                <!-- テキスト＆アクション領域 -->
-                                                <StackPanel Margin="12,10,12,12">
-                                                    <TextBlock Text="{Binding Title}" Foreground="#F1F5F9" FontSize="13.5"
-                                                               FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="38"
-                                                               TextTrimming="CharacterEllipsis" Height="38"
-                                                               ToolTip="{Binding Title}" Cursor="Hand"
-                                                               MouseLeftButtonUp="VideoTitle_MouseLeftButtonUp" Tag="{Binding}"/>
-
-                                                    <DockPanel Margin="0,6,0,2">
-                                                        <Button DockPanel.Dock="Right" Content="{Binding SubscribeIcon}"
-                                                                Foreground="{Binding SubscribeForeground}"
-                                                                Background="Transparent" BorderThickness="0"
-                                                                FontSize="11" FontWeight="SemiBold" Cursor="Hand"
-                                                                Padding="4,0" Click="ToggleSubscribeCard_Click" Tag="{Binding}"
-                                                                ToolTip="ログイン不要でこのアプリ内にチャンネル登録 / 解除"/>
-                                                        <TextBlock Text="{Binding Author}" Foreground="#94A3B8" FontSize="11.5"
-                                                                   TextTrimming="CharacterEllipsis" Cursor="Hand"
-                                                                   MouseLeftButtonUp="AuthorName_MouseLeftButtonUp" Tag="{Binding}"
-                                                                   ToolTip="クリックでこの投稿者の動画を一覧表示"/>
-                                                    </DockPanel>
-                                                    <!-- 再生数・日付 ＋ 右端に小さなアイコンボタン（再生はサムネイルをクリック） -->
-                                                    <DockPanel Margin="0,2,-6,0">
-                                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Button Content="{Binding FavoriteIcon}" Foreground="{Binding FavoriteForeground}"
-                                                                    Style="{StaticResource IconBtn}" FontSize="13.5"
-                                                                    Click="ToggleFavoriteCard_Click" Tag="{Binding}"
-                                                                    ToolTip="お気に入りに追加 / 解除"/>
-                                                            <Button Content="{Binding WatchLaterIcon}" Foreground="{Binding WatchLaterForeground}"
-                                                                    Style="{StaticResource IconBtn}" FontSize="10.5"
-                                                                    Click="ToggleWatchLaterCard_Click" Tag="{Binding}"
-                                                                    ToolTip="後で見るリストに追加 / 解除"/>
-                                                            <Button Content="⋯" Style="{StaticResource IconBtn}" FontSize="14"
-                                                                    Click="AddToPlaylistButton_Click" Tag="{Binding}"
-                                                                    ToolTip="プレイリストへ追加 / 解除"/>
+                                                            <DockPanel Margin="0,6,0,2">
+                                                                <Button DockPanel.Dock="Right" Content="{Binding SubscribeIcon}"
+                                                                        Foreground="{Binding SubscribeForeground}"
+                                                                        Background="Transparent" BorderThickness="0"
+                                                                        FontSize="11" FontWeight="SemiBold" Cursor="Hand"
+                                                                        Padding="4,0" Click="ToggleSubscribeCard_Click" Tag="{Binding}"
+                                                                        ToolTip="ログイン不要でこのアプリ内にチャンネル登録 / 解除"/>
+                                                                <TextBlock Text="{Binding Author}" Foreground="#94A3B8" FontSize="11.5"
+                                                                           TextTrimming="CharacterEllipsis" Cursor="Hand"
+                                                                           MouseLeftButtonUp="AuthorName_MouseLeftButtonUp" Tag="{Binding}"
+                                                                           ToolTip="クリックでこの投稿者の動画を一覧表示"/>
+                                                            </DockPanel>
+                                                            <!-- 再生数・日付 ＋ 右端に小さなアイコンボタン（再生はサムネイルをクリック） -->
+                                                            <DockPanel Margin="0,2,-6,0">
+                                                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Button Content="{Binding FavoriteIcon}" Foreground="{Binding FavoriteForeground}"
+                                                                            Style="{StaticResource IconBtn}" FontSize="13.5"
+                                                                            Click="ToggleFavoriteCard_Click" Tag="{Binding}"
+                                                                            ToolTip="お気に入りに追加 / 解除"/>
+                                                                    <Button Content="{Binding WatchLaterIcon}" Foreground="{Binding WatchLaterForeground}"
+                                                                            Style="{StaticResource IconBtn}" FontSize="10.5"
+                                                                            Click="ToggleWatchLaterCard_Click" Tag="{Binding}"
+                                                                            ToolTip="後で見るリストに追加 / 解除"/>
+                                                                    <Button Content="⋯" Style="{StaticResource IconBtn}" FontSize="14"
+                                                                            Click="AddToPlaylistButton_Click" Tag="{Binding}"
+                                                                            ToolTip="プレイリストへ追加 / 解除"/>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding MetaSummary}" Foreground="#9AA4B5" FontSize="11"
+                                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            </DockPanel>
                                                         </StackPanel>
-                                                        <TextBlock Text="{Binding MetaSummary}" Foreground="#9AA4B5" FontSize="11"
-                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                    </DockPanel>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Border>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <!-- 検索結果の続きを読み込む（下までスクロールしても自動で読み込む） -->
-                            <Button x:Name="LoadMoreButton" Content="▼ もっと読み込む" Style="{StaticResource ActionBtn}"
-                                    HorizontalAlignment="Center" Margin="0,14,0,0" Padding="22,8"
-                                    Visibility="Collapsed" Click="LoadMoreButton_Click"/>
-                            </StackPanel>
-                        </ScrollViewer>
+                            <!-- ページ切り替え（前へ・ページ番号・次へ）。ボタンはコードで作る -->
+                            <Border x:Name="PagerBar" Grid.Row="1" Padding="0,6,0,10" Visibility="Collapsed">
+                                <StackPanel x:Name="PagerPanel" Orientation="Horizontal" HorizontalAlignment="Center"/>
+                            </Border>
+                        </Grid>
 
                         <!-- ローディング＆空状態メッセージ -->
                         <Border x:Name="StatusOverlay" Background="#AA0D0F14" Visibility="Collapsed">
@@ -981,13 +984,276 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- ========== ⚙ 設定画面 ========== -->
+                <ScrollViewer x:Name="SettingsView" Background="#00000000" Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto" Padding="28,22,28,36">
+                    <ScrollViewer.Resources>
+                        <!-- 1つの設定（左に名前と説明、右に操作） -->
+                        <Style x:Key="SettingRow" TargetType="DockPanel">
+                            <Setter Property="Margin" Value="0,0,0,14"/>
+                            <Setter Property="LastChildFill" Value="True"/>
+                        </Style>
+                        <Style x:Key="SettingName" TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#E2E8F0"/>
+                            <Setter Property="FontSize" Value="13"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Style>
+                        <Style x:Key="SettingDesc" TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#8B95A7"/>
+                            <Setter Property="FontSize" Value="11.5"/>
+                            <Setter Property="TextWrapping" Value="Wrap"/>
+                            <Setter Property="Margin" Value="0,3,16,0"/>
+                        </Style>
+                        <Style x:Key="SettingCard" TargetType="Border">
+                            <Setter Property="Background" Value="#0DFFFFFF"/>
+                            <Setter Property="BorderBrush" Value="#1AFFFFFF"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Setter Property="CornerRadius" Value="12"/>
+                            <Setter Property="Padding" Value="20,16,20,4"/>
+                            <Setter Property="Margin" Value="0,0,0,16"/>
+                        </Style>
+                        <Style x:Key="SettingHeader" TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="FontSize" Value="15"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <Setter Property="Margin" Value="0,0,0,14"/>
+                        </Style>
+                        <Style x:Key="SettingSwitch" TargetType="CheckBox">
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="CheckBox">
+                                        <Border x:Name="Track" Width="42" Height="22" CornerRadius="11" Background="#33FFFFFF">
+                                            <Border x:Name="Knob" Width="16" Height="16" CornerRadius="8" Background="#CBD5E1"
+                                                    HorizontalAlignment="Left" Margin="3,0"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Track" Property="Background" Value="#6366F1"/>
+                                                <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+                                                <Setter TargetName="Knob" Property="Background" Value="White"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                        <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                            <Setter Property="Width" Value="170"/>
+                            <Setter Property="Height" Value="30"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                        </Style>
+                    </ScrollViewer.Resources>
+
+                    <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+                        <TextBlock Text="⚙ 設定" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <TextBlock Text="変えた設定はこのPCに保存され、次に起動した時もそのまま使われます"
+                                   Foreground="#94A3B8" FontSize="12.5" Margin="0,4,0,18"/>
+
+                        <!-- ▶ 再生 -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="▶ 再生" Style="{StaticResource SettingHeader}"/>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=SpeedCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="0.75x"/>
+                                        <ComboBoxItem Content="1.0x（標準）"/>
+                                        <ComboBoxItem Content="1.25x"/>
+                                        <ComboBoxItem Content="1.5x"/>
+                                        <ComboBoxItem Content="2.0x"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="再生速度" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="すべてのサイトの動画に使う速さ" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetAutoNext" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="連続再生" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="動画が終わったら、右の「次に再生」の動画を自動で再生する" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetShuffle" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="シャッフル再生" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="連続再生の時、次の動画をリストからランダムに選ぶ" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetMusicBgListen" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="Musicモードは下のバーで再生" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="Musicモードで曲を選んだ時、プレイヤー画面を開かずに一覧のまま下のバーで再生する" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 🎨 映像と音 -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="🎨 映像と音" Style="{StaticResource SettingHeader}"/>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=AmbilightCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="🌈 標準発光"/>
+                                        <ComboBoxItem Content="✨ 強発光 (Ultra)"/>
+                                        <ComboBoxItem Content="🌙 ソフト発光"/>
+                                        <ComboBoxItem Content="OFF (黒枠)"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="アンビエントライト" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="動画の色に合わせて、周りをほんのり光らせる" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=AudioGainCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="100% (標準)"/>
+                                        <ComboBoxItem Content="150% 増幅"/>
+                                        <ComboBoxItem Content="200% 増幅"/>
+                                        <ComboBoxItem Content="300% 最大"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="音量ブースト" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="音が小さい動画を大きくする" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=AudioPresetCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="フラット (標準)"/>
+                                        <ComboBoxItem Content="🎸 重低音強化"/>
+                                        <ComboBoxItem Content="🎤 ボーカル明瞭"/>
+                                        <ComboBoxItem Content="🌙 夜間小音量用"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="音質" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="イコライザーで音の聞こえ方を変える" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=DanmakuStyleCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="💬 標準"/>
+                                        <ComboBoxItem Content="🔥 大きめ・濃密"/>
+                                        <ComboBoxItem Content="🌙 控えめ・半透明"/>
+                                        <ComboBoxItem Content="🚫 OFF"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="弾幕コメント" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="YouTubeのコメントやライブチャットを動画の上に流す" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 📋 一覧・検索 -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="📋 一覧・検索" Style="{StaticResource SettingHeader}"/>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox x:Name="SetShortsCombo" DockPanel.Dock="Right" SelectionChanged="SetShortsCombo_SelectionChanged">
+                                        <ComboBoxItem Content="🚫 ショートを除外"/>
+                                        <ComboBoxItem Content="📱 ショートだけ"/>
+                                        <ComboBoxItem Content="🎬 すべて表示"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="ショート動画" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="1分以下の短い縦型動画を一覧に出すかどうか" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=SortCombo, Mode=TwoWay}">
+                                        <ComboBoxItem Content="バランス順"/>
+                                        <ComboBoxItem Content="再生数が多い順"/>
+                                        <ComboBoxItem Content="動画が長い順"/>
+                                        <ComboBoxItem Content="動画が短い順"/>
+                                    </ComboBox>
+                                    <StackPanel>
+                                        <TextBlock Text="一覧の並び順" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="おすすめや検索結果の並べ方" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <StackPanel Margin="0,0,0,14">
+                                    <TextBlock Text="読み込むサイト" Style="{StaticResource SettingName}"/>
+                                    <TextBlock Text="OFFにしたサイトには通信しないので軽くなります（この画面を離れた時に読み込み直します）"
+                                               Style="{StaticResource SettingDesc}" Margin="0,3,0,8"/>
+                                    <UniformGrid x:Name="SiteToggleGrid" Columns="3" HorizontalAlignment="Left" Width="480"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 🛡 広告・ウィンドウ -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="🛡 広告・ウィンドウ" Style="{StaticResource SettingHeader}"/>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetAdBlock" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="広告ブロック" Style="{StaticResource SettingName}"/>
+                                        <TextBlock x:Name="SetAdBlockDesc" Text="広告やトラッカーを止め、動画の広告を自動で飛ばす" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetTopmost" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="常に手前に表示" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="ほかのウィンドウより前にPrismilを表示する" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 🔒 プライバシーとデータ -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="🔒 プライバシーとデータ" Style="{StaticResource SettingHeader}"/>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <Button DockPanel.Dock="Right" Content="🗑 履歴を消す" Style="{StaticResource ActionBtn}"
+                                            Padding="12,6" VerticalAlignment="Center" Click="ClearHistorySetting_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="視聴履歴" Style="{StaticResource SettingName}"/>
+                                        <TextBlock x:Name="SetHistoryDesc" Text="このPCに残っている視聴履歴をすべて消す" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <Button x:Name="BtnClearCookies" DockPanel.Dock="Right" Content="🧹 Cookie消去" Style="{StaticResource ActionBtn}"
+                                            Padding="12,6" VerticalAlignment="Center" Click="ClearCookies_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="Cookie・キャッシュ" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="アプリ内のブラウザに残っているCookie・ログイン状態・キャッシュをリセットする" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <Button DockPanel.Dock="Right" Content="📂 開く" Style="{StaticResource ActionBtn}"
+                                            Padding="12,6" VerticalAlignment="Center" Click="OpenLocalDataFolder_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="データの保存場所" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="お気に入り・履歴・設定を保存しているフォルダ (library.json) を開く" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ℹ 情報 -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="ℹ このアプリについて" Style="{StaticResource SettingHeader}"/>
+                                <TextBlock x:Name="AppVersionText" Text="Prismil" Foreground="#E2E8F0" FontSize="13" Margin="0,0,0,10"/>
+                                <TextBlock Text="ショートカット" Style="{StaticResource SettingName}"/>
+                                <TextBlock Style="{StaticResource SettingDesc}" Margin="0,4,0,14" LineHeight="20"
+                                           Text="Ctrl+L / Ctrl+F：検索　Ctrl+B：メニューの表示切替　Ctrl+M：ミニ窓　F11：全画面　T：シアターモード　Esc：元に戻す&#x0a;動画の上で　Space / K：再生・一時停止　← →：5秒移動　J / L：10秒移動　↑ ↓：音量　M：ミュート　F：全画面　0〜9：位置へ移動"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- ========== 2. クリーン再生画面 (Zen Player View + BGMモード + ミニプレイヤー + サイドキュー) ========== -->
                 <Grid x:Name="PlayerView" Background="#66000000" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="MiniPlayerBarRow" Height="0"/>
                         <RowDefinition x:Name="PlayerControlBarRow" Height="50"/>
-                        <RowDefinition x:Name="PlayerStudioBarRow" Height="40"/>
-                        <RowDefinition x:Name="PlayerDanmakuBarRow" Height="42"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -1011,7 +1277,7 @@
                     </Border>
 
                     <!-- 通常プレイヤー上部コントロールバー -->
-                    <Border x:Name="PlayerHeaderBar" Grid.Row="1" Background="#0AFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="0,0,0,1" Padding="12,0">
+                    <Border x:Name="PlayerHeaderBar" Grid.Row="1" Background="#0AFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="0,0,0,1" Padding="10,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -1021,19 +1287,19 @@
 
                             <!-- 一覧へ戻るボタン -->
                             <Button Grid.Column="0" Content="← 一覧へ" Style="{StaticResource ActionBtn}"
-                                    Margin="0,0,10,0" Click="BackToGrid_Click"/>
+                                    Margin="0,0,10,0" Padding="9,5" Click="BackToGrid_Click" ToolTip="一覧に戻る"/>
 
-                            <!-- 現在再生中の動画情報 -->
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border x:Name="PlayerSiteBadge" CornerRadius="5" Padding="7,2" Background="#E62117" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <!-- 現在再生中の動画情報（残りの幅いっぱいを使い、入りきらない分は … で省略） -->
+                            <DockPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0" LastChildFill="True">
+                                <Border x:Name="PlayerSiteBadge" DockPanel.Dock="Left" CornerRadius="5" Padding="7,2" Background="#E62117" Margin="0,0,8,0" VerticalAlignment="Center">
                                     <TextBlock x:Name="PlayerSiteText" Text="YouTube" Foreground="White" FontSize="10.5" FontWeight="Bold"/>
                                 </Border>
                                 <TextBlock x:Name="PlayerTitleText" Text="動画を選択してください" Foreground="White"
                                            FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" MaxWidth="360"/>
-                            </StackPanel>
+                                           VerticalAlignment="Center" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                            </DockPanel>
 
-                            <!-- プレイヤー専用アクションボタン群 -->
+                            <!-- よく使うボタンだけを並べる。それ以外は ⚙ 設定 の中 -->
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="BtnPlayerSubscribe" Content="☆ 登録" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,4,0" Padding="8,5" Click="PlayerToggleSubscribe_Click"
@@ -1043,155 +1309,150 @@
                                 <Button x:Name="BtnPlayerWatchLater" Content="+後で" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,4,0" Padding="8,5" Click="PlayerToggleWatchLater_Click" ToolTip="後で見る追加/解除"/>
                                 <Button Content="📁+" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,8,0" Padding="8,5" Click="PlayerAddToPlaylist_Click" ToolTip="カスタムプレイリストへ追加"/>
+                                        Margin="0,0,4,0" Padding="8,5" Click="PlayerAddToPlaylist_Click" ToolTip="カスタムプレイリストへ追加"/>
 
-                                <!-- 再生速度変更 -->
-                                <ComboBox x:Name="SpeedCombo" Width="70" Height="28" VerticalContentAlignment="Center"
-                                          Margin="0,0,5,0" SelectionChanged="SpeedCombo_SelectionChanged"
-                                          ToolTip="再生速度 (3サイト共通)">
-                                    <ComboBoxItem Content="0.75x" Tag="0.75"/>
-                                    <ComboBoxItem Content="1.0x" Tag="1.0" IsSelected="True"/>
-                                    <ComboBoxItem Content="1.25x" Tag="1.25"/>
-                                    <ComboBoxItem Content="1.5x" Tag="1.5"/>
-                                    <ComboBoxItem Content="2.0x" Tag="2.0"/>
-                                </ComboBox>
+                                <Border Width="1" Height="22" Background="#26FFFFFF" Margin="6,0,10,0"/>
 
-                                <!-- 1曲ループ再生トグル -->
-                                <Button x:Name="BtnLoopToggle" Content="🔁 ループ: OFF" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,5,0" Padding="8,5" Click="LoopToggle_Click"
-                                        ToolTip="現在の動画を無限リピート再生"/>
-
-                                <!-- サイト横断の自動連続再生トグル -->
-                                <Button x:Name="BtnAutoNextToggle" Content="⏭ 連続: ON" Style="{StaticResource ActionBtn}" Margin="0,0,5,0" Padding="8,5" Click="AutoNextToggle_Click"
-                                        ToolTip="動画終了時にサイドリストの次の動画をサイトをまたいで自動再生"/>
-
-                                <!-- BGM（音声のみ・省電力）モード -->
-                                <Button x:Name="BtnAudioOnlyToggle" Content="🎧 BGMモード" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,5,0" Padding="8,5" Click="AudioOnlyToggle_Click"
-                                        ToolTip="映像を隠して音楽・ラジオプレイヤーとして省電力再生"/>
-
-                                <!-- 超小型ミニプレイヤー（PiP）ボタン -->
-                                <Button x:Name="BtnMiniPlayer" Content="🗗 ミニ窓" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,5,0" Padding="8,5" Click="MiniPlayerButton_Click"
-                                        ToolTip="画面の隅に置ける超小型ピクチャー・イン・ピクチャー窓に変形 (Ctrl+M)"/>
-
-                                <!-- スクリーンショット保存 -->
-                                <Button x:Name="BtnScreenshot" Content="📸" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,5,0" Padding="8,5" Click="Screenshot_Click"
-                                        ToolTip="現在の画面をピクチャフォルダ(Pictures/ZenTube)に保存"/>
-
-                                <!-- コメント欄を別ウィンドウで開く -->
                                 <Button x:Name="BtnOpenComments" Content="💬 コメント"
-                                        Style="{StaticResource PrimaryBtn}" Margin="0,0,5,0" Padding="9,5"
-                                        Click="OpenComments_Click"
-                                        ToolTip="この動画のサイトのページ（コメント欄・チャット）を別ウィンドウで開く。動画はそのまま再生されます"/>
-
+                                        Style="{StaticResource PrimaryBtn}" Margin="0,0,4,0" Padding="9,5"
+                                        Click="ShowCommentsPanel_Click"
+                                        ToolTip="右の欄にこの動画のコメントを一覧で表示する"/>
                                 <Button x:Name="BtnToggleSideQueue" Content="📋" Style="{StaticResource ActionBtn}"
-                                        Margin="0,0,5,0" Padding="8,5" Click="ToggleSideQueue_Click" ToolTip="右側の動画キューリストを表示/非表示"/>
-
-                                <Button Content="⛶" Style="{StaticResource ActionBtn}"
+                                        Margin="0,0,4,0" Padding="8,5" Click="ToggleSideQueue_Click" ToolTip="右の欄（次の動画・コメント）を表示/非表示"/>
+                                <Button x:Name="BtnTheaterMode" Content="🎭 シアター" Style="{StaticResource ActionBtn}"
+                                        Margin="0,0,4,0" Padding="8,5" Click="TheaterModeButton_Click"
+                                        ToolTip="メニューやバーを隠して、動画をウィンドウいっぱいに大きく表示 (T / Esc で戻る)"/>
+                                <Button Content="⛶" Style="{StaticResource ActionBtn}" Margin="0,0,4,0"
                                         Padding="8,5" Click="FullScreenButton_Click" ToolTip="全画面表示 (F11)"/>
+                                <Button x:Name="BtnPlayerSettings" Content="⚙ 設定" Style="{StaticResource ActionBtn}"
+                                        Padding="9,5" Click="PlayerSettingsButton_Click"
+                                        ToolTip="再生速度・ループ・音量・音質・映像効果・弾幕などの設定"/>
                             </StackPanel>
-                        </Grid>
-                    </Border>
 
-                    <!-- スタジオFX・再生アシストバー (音量ブースト / イコライザー / ABリピート / シャッフル / 反転 / 減光) -->
-                    <Border x:Name="PlayerStudioBar" Grid.Row="2" Background="#00000000" BorderBrush="#14FFFFFF" BorderThickness="0,0,0,1" Padding="14,0">
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="🎛 STUDIO FX:" Foreground="#9AA4B5" FontSize="11" FontWeight="Bold"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <!-- ⚙ 設定パネル（動画の上に重ねて開く。外をクリックすると閉じる） -->
+                            <Popup x:Name="PlayerSettingsPopup" PlacementTarget="{Binding ElementName=BtnPlayerSettings}"
+                                   Placement="Bottom" VerticalOffset="6" StaysOpen="False" AllowsTransparency="True"
+                                   PopupAnimation="Fade">
+                                <Border x:Name="PlayerStudioBar" Width="520" Background="#F2141824" BorderBrush="#33FFFFFF"
+                                        BorderThickness="1" CornerRadius="12" Padding="16,12,16,14">
+                                    <Border.Resources>
+                                        <Style x:Key="SettingsHeader" TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#8B95A7"/>
+                                            <Setter Property="FontSize" Value="11"/>
+                                            <Setter Property="FontWeight" Value="Bold"/>
+                                            <Setter Property="Margin" Value="2,8,0,6"/>
+                                        </Style>
+                                        <Style x:Key="SettingsLabel" TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#CBD5E1"/>
+                                            <Setter Property="FontSize" Value="12"/>
+                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                            <Setter Property="Margin" Value="2,0,6,0"/>
+                                        </Style>
+                                    </Border.Resources>
+                                    <StackPanel>
+                                        <!-- 再生 -->
+                                        <TextBlock Text="▶ 再生" Style="{StaticResource SettingsHeader}" Margin="2,0,0,6"/>
+                                        <WrapPanel>
+                                            <TextBlock Text="速度" Style="{StaticResource SettingsLabel}"/>
+                                            <ComboBox x:Name="SpeedCombo" Width="76" Height="28" VerticalContentAlignment="Center"
+                                                      Margin="0,0,10,6" SelectionChanged="SpeedCombo_SelectionChanged"
+                                                      ToolTip="再生速度 (3サイト共通)">
+                                                <ComboBoxItem Content="0.75x" Tag="0.75"/>
+                                                <ComboBoxItem Content="1.0x" Tag="1.0" IsSelected="True"/>
+                                                <ComboBoxItem Content="1.25x" Tag="1.25"/>
+                                                <ComboBoxItem Content="1.5x" Tag="1.5"/>
+                                                <ComboBoxItem Content="2.0x" Tag="2.0"/>
+                                            </ComboBox>
+                                            <Button x:Name="BtnLoopToggle" Content="🔁 ループ: OFF" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="LoopToggle_Click"
+                                                    ToolTip="現在の動画を無限リピート再生"/>
+                                            <Button x:Name="BtnAutoNextToggle" Content="⏭ 連続: ON" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="AutoNextToggle_Click"
+                                                    ToolTip="動画終了時にサイドリストの次の動画をサイトをまたいで自動再生"/>
+                                            <Button x:Name="BtnShuffleToggle" Content="🔀 シャッフル: OFF" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="ShuffleToggle_Click"
+                                                    ToolTip="連続再生時にサイドリストからランダムに次の動画を選択"/>
+                                            <Button x:Name="BtnABRepeat" Content="📍 A-B区間ループ: OFF" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="ABRepeatButton_Click"
+                                                    ToolTip="1回目クリックでA地点(開始)、2回目でB地点(終了)を記録してその区間だけを無限ループ、3回目で解除"/>
+                                        </WrapPanel>
 
-                                <!-- アンビエントライト (Ambient Light) モード -->
-                                <TextBlock Text="🌈 アンビエント:" Foreground="#C7D2FE" FontSize="11.5" FontWeight="SemiBold"
-                                           VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox x:Name="AmbilightCombo" Width="116" Height="26" VerticalContentAlignment="Center"
-                                          Margin="0,0,10,0" SelectionChanged="AudioFxCombo_SelectionChanged"
-                                          ToolTip="動画の周囲にリアルタイムで映像の色をぼかして発光させる Ambient Light 効果">
-                                    <ComboBoxItem Content="🌈 標準発光" Tag="vivid" IsSelected="True"/>
-                                    <ComboBoxItem Content="✨ 強発光 (Ultra)" Tag="ultra"/>
-                                    <ComboBoxItem Content="🌙 ソフト発光" Tag="soft"/>
-                                    <ComboBoxItem Content="OFF (黒枠)" Tag="off"/>
-                                </ComboBox>
+                                        <!-- 表示 -->
+                                        <TextBlock Text="🖥 表示" Style="{StaticResource SettingsHeader}"/>
+                                        <WrapPanel>
+                                            <Button x:Name="BtnAudioOnlyToggle" Content="🎧 BGMモード" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="AudioOnlyToggle_Click"
+                                                    ToolTip="映像を隠して音楽・ラジオプレイヤーとして省電力再生"/>
+                                            <Button x:Name="BtnMiniPlayer" Content="🗗 ミニ窓" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="MiniPlayerButton_Click"
+                                                    ToolTip="画面の隅に置ける超小型ピクチャー・イン・ピクチャー窓に変形 (Ctrl+M)"/>
+                                            <Button x:Name="BtnScreenshot" Content="📸 スクショ" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="Screenshot_Click"
+                                                    ToolTip="現在の画面をピクチャフォルダ(Pictures/ZenTube)に保存"/>
+                                            <Button x:Name="BtnMirrorToggle" Content="🪞 左右反転: OFF" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="MirrorToggle_Click"
+                                                    ToolTip="動画の映像を左右反転（ミラー表示：ダンス練習などに最適）"/>
+                                            <Button x:Name="BtnDimToggle" Content="🕶 減光フィルター: OFF" Style="{StaticResource ActionBtn}"
+                                                    Margin="0,0,6,6" Padding="9,5" Click="DimToggle_Click"
+                                                    ToolTip="画面の眩しさを抑えるシアター減光モード"/>
+                                            <TextBlock Text="アンビエント" Style="{StaticResource SettingsLabel}" Margin="2,0,6,6"/>
+                                            <ComboBox x:Name="AmbilightCombo" Width="130" Height="28" VerticalContentAlignment="Center"
+                                                      Margin="0,0,6,6" SelectionChanged="AudioFxCombo_SelectionChanged"
+                                                      ToolTip="動画の周囲にリアルタイムで映像の色をぼかして発光させる Ambient Light 効果">
+                                                <ComboBoxItem Content="🌈 標準発光" Tag="vivid" IsSelected="True"/>
+                                                <ComboBoxItem Content="✨ 強発光 (Ultra)" Tag="ultra"/>
+                                                <ComboBoxItem Content="🌙 ソフト発光" Tag="soft"/>
+                                                <ComboBoxItem Content="OFF (黒枠)" Tag="off"/>
+                                            </ComboBox>
+                                        </WrapPanel>
 
-                                <!-- 音量ブースター (最大300%) -->
-                                <TextBlock Text="🔊 音量:" Foreground="#94A3B8" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox x:Name="AudioGainCombo" Width="96" Height="26" VerticalContentAlignment="Center"
-                                          Margin="0,0,10,0" SelectionChanged="AudioFxCombo_SelectionChanged"
-                                          ToolTip="音が小さい動画を最大300%まで増幅">
-                                    <ComboBoxItem Content="100% (標準)" Tag="1.0" IsSelected="True"/>
-                                    <ComboBoxItem Content="150% 増幅" Tag="1.5"/>
-                                    <ComboBoxItem Content="200% 増幅" Tag="2.0"/>
-                                    <ComboBoxItem Content="300% 最大" Tag="3.0"/>
-                                </ComboBox>
+                                        <!-- 音 -->
+                                        <TextBlock Text="🔊 音" Style="{StaticResource SettingsHeader}"/>
+                                        <WrapPanel>
+                                            <TextBlock Text="音量" Style="{StaticResource SettingsLabel}" Margin="2,0,6,6"/>
+                                            <ComboBox x:Name="AudioGainCombo" Width="110" Height="28" VerticalContentAlignment="Center"
+                                                      Margin="0,0,14,6" SelectionChanged="AudioFxCombo_SelectionChanged"
+                                                      ToolTip="音が小さい動画を最大300%まで増幅">
+                                                <ComboBoxItem Content="100% (標準)" Tag="1.0" IsSelected="True"/>
+                                                <ComboBoxItem Content="150% 増幅" Tag="1.5"/>
+                                                <ComboBoxItem Content="200% 増幅" Tag="2.0"/>
+                                                <ComboBoxItem Content="300% 最大" Tag="3.0"/>
+                                            </ComboBox>
+                                            <TextBlock Text="音質" Style="{StaticResource SettingsLabel}" Margin="2,0,6,6"/>
+                                            <ComboBox x:Name="AudioPresetCombo" Width="130" Height="28" VerticalContentAlignment="Center"
+                                                      Margin="0,0,6,6" SelectionChanged="AudioFxCombo_SelectionChanged"
+                                                      ToolTip="Web Audio API によるリアルタイム音質イコライザー">
+                                                <ComboBoxItem Content="フラット (標準)" Tag="normal" IsSelected="True"/>
+                                                <ComboBoxItem Content="🎸 重低音強化" Tag="bass"/>
+                                                <ComboBoxItem Content="🎤 ボーカル明瞭" Tag="vocal"/>
+                                                <ComboBoxItem Content="🌙 夜間小音量用" Tag="night"/>
+                                            </ComboBox>
+                                        </WrapPanel>
 
-                                <!-- 音質イコライザー -->
-                                <TextBlock Text="🎵 音質:" Foreground="#94A3B8" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <ComboBox x:Name="AudioPresetCombo" Width="118" Height="26" VerticalContentAlignment="Center"
-                                          Margin="0,0,12,0" SelectionChanged="AudioFxCombo_SelectionChanged"
-                                          ToolTip="Web Audio API によるリアルタイム音質イコライザー">
-                                    <ComboBoxItem Content="フラット (標準)" Tag="normal" IsSelected="True"/>
-                                    <ComboBoxItem Content="🎸 重低音強化" Tag="bass"/>
-                                    <ComboBoxItem Content="🎤 ボーカル明瞭" Tag="vocal"/>
-                                    <ComboBoxItem Content="🌙 夜間小音量用" Tag="night"/>
-                                </ComboBox>
-
-                                <!-- A-B 区間リピート -->
-                                <Button x:Name="BtnABRepeat" Content="📍 A-B区間ループ: OFF" Style="{StaticResource ActionBtn}"
-                                        Padding="9,3" Margin="0,0,8,0" Click="ABRepeatButton_Click"
-                                        ToolTip="1回目クリックでA地点(開始)、2回目でB地点(終了)を記録してその区間だけを無限ループ、3回目で解除"/>
-
-                                <!-- シャッフル再生トグル -->
-                                <Button x:Name="BtnShuffleToggle" Content="🔀 シャッフル: OFF" Style="{StaticResource ActionBtn}"
-                                        Padding="9,3" Margin="0,0,8,0" Click="ShuffleToggle_Click"
-                                        ToolTip="連続再生時にサイドリストからランダムに次の動画を選択"/>
-
-                                <!-- 映像左右反転（ダンス練習・振付確認用） -->
-                                <Button x:Name="BtnMirrorToggle" Content="🪞 左右反転: OFF" Style="{StaticResource ActionBtn}"
-                                        Padding="9,3" Margin="0,0,8,0" Click="MirrorToggle_Click"
-                                        ToolTip="動画の映像を左右反転（ミラー表示：ダンス練習などに最適）"/>
-
-                                <!-- 夜間減光フィルター -->
-                                <Button x:Name="BtnDimToggle" Content="🕶 減光フィルター: OFF" Style="{StaticResource ActionBtn}"
-                                        Padding="9,3" Click="DimToggle_Click"
-                                        ToolTip="画面の眩しさを抑えるシアター減光モード"/>
-                            </StackPanel>
-                        </ScrollViewer>
-                    </Border>
-
-                    <!-- 💬 弾幕コメント・シューターバー (ニコニコ風 横スクロールコメント表示 ＆ ローカル弾幕投稿・スタンプ) -->
-                    <Border x:Name="PlayerDanmakuBar" Grid.Row="3" Background="#00000000" BorderBrush="#0FFFFFFF" BorderThickness="0,0,0,1" Padding="14,0">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <!-- 左：弾幕表示モード切替 ＆ 取得ステータス -->
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="💬 弾幕コメント:" Foreground="#38BDF8" FontSize="11.5" FontWeight="Bold"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <ComboBox x:Name="DanmakuStyleCombo" Width="136" Height="27" VerticalContentAlignment="Center"
-                                          Margin="0,0,8,0" SelectionChanged="DanmakuStyleCombo_SelectionChanged"
-                                          ToolTip="YouTubeコメント・Twitch/YouTubeライブチャットを画面上に横スクロール表示">
-                                    <ComboBoxItem Content="💬 弾幕: 標準" Tag="normal" IsSelected="True"/>
-                                    <ComboBoxItem Content="🔥 弾幕: 大きめ・濃密" Tag="bold"/>
-                                    <ComboBoxItem Content="🌙 弾幕: 控えめ・半透明" Tag="subtle"/>
-                                    <ComboBoxItem Content="🚫 弾幕: OFF" Tag="off"/>
-                                </ComboBox>
-
-                                <Border Background="#0FFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" CornerRadius="6"
-                                        Padding="8,3" Margin="0,0,10,0" VerticalAlignment="Center">
-                                    <TextBlock x:Name="DanmakuStatusText" Text="💬 自動同期: ON" Foreground="#94A3B8" FontSize="11"/>
+                                        <!-- 弾幕 -->
+                                        <TextBlock Text="💬 弾幕コメント" Style="{StaticResource SettingsHeader}"/>
+                                        <WrapPanel>
+                                            <ComboBox x:Name="DanmakuStyleCombo" Width="160" Height="28" VerticalContentAlignment="Center"
+                                                      Margin="0,0,8,0" SelectionChanged="DanmakuStyleCombo_SelectionChanged"
+                                                      ToolTip="YouTubeコメント・Twitch/YouTubeライブチャットを画面上に横スクロール表示">
+                                                <ComboBoxItem Content="💬 弾幕: 標準" Tag="normal" IsSelected="True"/>
+                                                <ComboBoxItem Content="🔥 弾幕: 大きめ・濃密" Tag="bold"/>
+                                                <ComboBoxItem Content="🌙 弾幕: 控えめ・半透明" Tag="subtle"/>
+                                                <ComboBoxItem Content="🚫 弾幕: OFF" Tag="off"/>
+                                            </ComboBox>
+                                            <Border Background="#0FFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" CornerRadius="6"
+                                                    Padding="8,4" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DanmakuStatusText" Text="💬 自動同期: ON" Foreground="#94A3B8" FontSize="11"/>
+                                            </Border>
+                                        </WrapPanel>
+                                    </StackPanel>
                                 </Border>
-                            </StackPanel>
-
+                            </Popup>
                         </Grid>
                     </Border>
 
                     <!-- 下部：WebView2 クリーンプレイヤー ＋ BGMオーバーレイ ＋ 統合サイドリスト -->
-                    <Grid Grid.Row="4">
+                    <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition x:Name="SideQueueColumn" Width="320"/>
@@ -1247,65 +1508,183 @@
                                 <Border Grid.Row="0" Padding="10,10,10,8" BorderBrush="#14FFFFFF" BorderThickness="0,0,0,1">
                                     <StackPanel>
                                         <TextBlock Text="NEXT UP / 連続再生キュー" Foreground="#9AA4B5" FontSize="10.5" FontWeight="Bold" Margin="2,0,0,6"/>
-                                        <UniformGrid Columns="3">
-                                            <Button x:Name="BtnQueueCurrent" Content="現在のリスト" Style="{StaticResource ActionBtn}"
-                                                    Margin="2" Padding="4,5" FontSize="11" Click="QueueTab_Click" Tag="Current"/>
-                                            <Button x:Name="BtnQueueWatchLater" Content="🕒 後で見る" Style="{StaticResource ActionBtn}"
-                                                    Margin="2" Padding="4,5" FontSize="11" Click="QueueTab_Click" Tag="WatchLater"/>
+                                        <UniformGrid Columns="4">
+                                            <Button x:Name="BtnQueueCurrent" Content="⏭ 次に" Style="{StaticResource ActionBtn}"
+                                                    Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Current"
+                                                    ToolTip="次に再生：検索・一覧の続きと、視聴履歴をもとにしたおすすめ"/>
+                                            <Button x:Name="BtnQueueWatchLater" Content="🕒 後で" Style="{StaticResource ActionBtn}"
+                                                    Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="WatchLater"
+                                                    ToolTip="後で見る"/>
                                             <Button x:Name="BtnQueueFavorites" Content="♥ お気に入り" Style="{StaticResource ActionBtn}"
-                                                    Margin="2" Padding="4,5" FontSize="11" Click="QueueTab_Click" Tag="Favorites"/>
+                                                    Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Favorites"/>
+                                            <Button x:Name="BtnQueueComments" Content="💬 コメント" Style="{StaticResource ActionBtn}"
+                                                    Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Comments"
+                                                    ToolTip="再生中の動画のコメントを一覧で見る"/>
                                         </UniformGrid>
                                     </StackPanel>
                                 </Border>
 
                                 <!-- コンパクト動画リスト -->
-                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="8,6">
-                                    <ItemsControl x:Name="SideQueueItemsControl">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Click="PlayVideoCard_Click" Tag="{Binding}" Cursor="Hand"
-                                                        Background="Transparent" BorderThickness="0" Margin="0,3" Padding="0">
-                                                    <Button.Template>
-                                                        <ControlTemplate TargetType="Button">
-                                                            <Border x:Name="ItemBd" CornerRadius="8" Background="#00000000" Padding="7">
-                                                                <Grid>
-                                                                    <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="108"/>
-                                                                        <ColumnDefinition Width="*"/>
-                                                                    </Grid.ColumnDefinitions>
+                                <ItemsControl x:Name="SideQueueItemsControl" Grid.Row="1" Padding="8,6"
+                                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                              VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+                                    <ItemsControl.Template>
+                                        <ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" Focusable="False"
+                                                          Padding="{TemplateBinding Padding}">
+                                                <ItemsPresenter/>
+                                            </ScrollViewer>
+                                        </ControlTemplate>
+                                    </ItemsControl.Template>
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <VirtualizingStackPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Click="PlayVideoCard_Click" Tag="{Binding}" Cursor="Hand"
+                                                    Background="Transparent" BorderThickness="0" Margin="0,3" Padding="0">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="ItemBd" CornerRadius="8" Background="#00000000" Padding="7">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="108"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
 
-                                                                    <Border Grid.Column="0" Height="62" CornerRadius="6" ClipToBounds="True" Background="#33000000">
-                                                                        <Grid>
-                                                                            <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"/>
-                                                                            <Border HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                                                    Margin="4,4,0,0" CornerRadius="4" Padding="5,1"
-                                                                                    Background="{Binding SiteBadgeBrush}">
-                                                                                <TextBlock Text="{Binding SiteDisplayName}" Foreground="White" FontSize="9" FontWeight="Bold"/>
-                                                                            </Border>
-                                                                        </Grid>
-                                                                    </Border>
+                                                                <Border Grid.Column="0" Height="62" CornerRadius="6" ClipToBounds="True" Background="#33000000">
+                                                                    <Grid>
+                                                                        <Image Source="{Binding ThumbnailUrl, Converter={StaticResource ThumbConverter}, ConverterParameter=200}" Stretch="UniformToFill"/>
+                                                                        <Border HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                                                Margin="4,4,0,0" CornerRadius="4" Padding="5,1"
+                                                                                Background="{Binding SiteBadgeBrush}">
+                                                                            <TextBlock Text="{Binding SiteDisplayName}" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                </Border>
 
-                                                                    <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
-                                                                        <TextBlock Text="{Binding Title}" Foreground="#E2E8F0" FontSize="12"
-                                                                                   FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="34"
-                                                                                   TextTrimming="CharacterEllipsis"/>
-                                                                        <TextBlock Text="{Binding Author}" Foreground="#9AA4B5" FontSize="10.5"
-                                                                                   TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
-                                                                    </StackPanel>
-                                                                </Grid>
-                                                            </Border>
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="ItemBd" Property="Background" Value="#1AFFFFFF"/>
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
+                                                                <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Title}" Foreground="#E2E8F0" FontSize="12"
+                                                                               FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="34"
+                                                                               TextTrimming="CharacterEllipsis"/>
+                                                                    <TextBlock Text="{Binding Author}" Foreground="#9AA4B5" FontSize="10.5"
+                                                                               TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
+                                                                    <TextBlock Text="{Binding QueueReason}" Foreground="#A5B4FC" FontSize="10"
+                                                                               Margin="0,2,0,0">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding HasQueueReason}" Value="False">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="ItemBd" Property="Background" Value="#1AFFFFFF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- 💬 コメント一覧（弾幕ではなく、普通のコメント欄として読む） -->
+                                <Grid x:Name="CommentsPanel" Grid.Row="1" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <DockPanel Grid.Row="0" Margin="12,8,10,4" LastChildFill="True">
+                                        <Button DockPanel.Dock="Right" Content="↗ サイトで見る" Style="{StaticResource ActionBtn}"
+                                                Padding="7,3" FontSize="10.5" Margin="6,0,0,0" Click="OpenComments_Click"
+                                                ToolTip="サイトのページ（コメント欄・チャット）を別ウィンドウで開く"/>
+                                        <Button x:Name="BtnCommentsSort" DockPanel.Dock="Right" Content="人気順" Style="{StaticResource ActionBtn}"
+                                                Padding="7,3" FontSize="10.5" Click="CommentsSort_Click" Visibility="Collapsed"
+                                                ToolTip="時間順 / 人気順（ニコる順）を切り替え"/>
+                                        <TextBlock x:Name="CommentsStatusText" Text="" Foreground="#9AA4B5" FontSize="11"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+
+                                    <ListBox x:Name="CommentsList" Grid.Row="1" Background="Transparent" BorderThickness="0"
+                                             Padding="6,2,6,8" HorizontalContentAlignment="Stretch"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                             VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.ScrollChanged="CommentsList_ScrollChanged">
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <ContentPresenter/>
                                                         </ControlTemplate>
-                                                    </Button.Template>
-                                                </Button>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border x:Name="CommentBd" CornerRadius="8" Padding="9,7" Margin="0,2" Background="#0DFFFFFF">
+                                                    <StackPanel>
+                                                        <DockPanel LastChildFill="True">
+                                                            <Button DockPanel.Dock="Left" Content="{Binding TimeText}" Tag="{Binding}"
+                                                                    Click="CommentTime_Click" Cursor="Hand" Margin="0,0,7,0"
+                                                                    ToolTip="この場面へ移動">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border x:Name="Bd" Background="#336366F1" CornerRadius="4" Padding="5,0">
+                                                                            <ContentPresenter TextElement.Foreground="#C7D2FE" TextElement.FontSize="10.5"
+                                                                                              VerticalAlignment="Center"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter TargetName="Bd" Property="Background" Value="#666366F1"/>
+                                                                            </Trigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                                <Button.Style>
+                                                                    <Style TargetType="Button">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasTime}" Value="False">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Button.Style>
+                                                            </Button>
+                                                            <TextBlock Text="{Binding Author}" Foreground="#A5B4FC" FontSize="11" FontWeight="SemiBold"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasAuthor}" Value="False">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Text}" Foreground="#E2E8F0" FontSize="12.5"
+                                                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                        <TextBlock Text="{Binding Meta}" Foreground="#7C8799" FontSize="10" Margin="0,4,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
                                             </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Grid>
                             </Grid>
                         </Border>
                     </Grid>
@@ -1394,6 +1773,13 @@
                             Click="UpdateRestart_Click"/>
                 </StackPanel>
             </StackPanel>
+        </Border>
+
+        <!-- 短いお知らせ（ログインが必要な動画を飛ばした時など）。数秒で消える -->
+        <Border x:Name="NoticeToast" Grid.ColumnSpan="2" Visibility="Collapsed" IsHitTestVisible="False"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,84,0,0" MaxWidth="640"
+                Background="#F21C1F27" BorderBrush="#1AFFFFFF" BorderThickness="1" CornerRadius="12" Padding="16,10">
+            <TextBlock x:Name="NoticeToastText" Foreground="White" FontSize="13" TextWrapping="Wrap"/>
         </Border>
     </Grid>
 </Window>

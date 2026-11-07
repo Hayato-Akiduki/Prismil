@@ -32,9 +32,9 @@ public static class ZenPlayerScript
             window.__zentubeAudioPreset = 'normal';
             window.__zentubePointA = null;
             window.__zentubePointB = null;
-            window.__zentubeTimedComments = [];
-            window.__zentubeGeneralComments = [];
-            window.__zentubeGeneralCursor = 0;
+            window.__zentubeTimedComments = [];   // 弾幕にするコメント（時間指定あり・なしの両方）
+            window.__zentubeDmShownText = new Set(); // 一度流した文面
+            window.__zentubeDmScheduled = false;
             let wasAdPlaying = false;
             let lastColorSend = 0;
             let lastDanmakuSpawn = 0;
@@ -591,7 +591,14 @@ public static class ZenPlayerScript
                 }
             }
 
-            // 動画再生位置に合わせたタイムスタンプ弾幕＆一般コメント弾幕のスケジューラ
+            // 弾幕を1件流し、流した文面を覚える（同じ文面は二度と流さない）
+            function fireDanmaku(c) {
+                c.__fired = true;
+                if (window.__zentubeDmShownText) window.__zentubeDmShownText.add(c.text);
+                spawnDanmaku(c.text, c.color || '#FFFFFF', Boolean(c.isUser));
+            }
+
+            // 動画の再生位置に合わせて、コメントをそれぞれの時間に1回ずつ流すスケジューラ
             function tickDanmakuEngine() {
                 const video = document.querySelector('video, audio');
                 const root = document.documentElement;
@@ -604,39 +611,63 @@ public static class ZenPlayerScript
 
                 harvestLiveDomComments();
 
-                const curTime = video ? (video.currentTime || 0) : 0;
+                if (!video) return;
+                const curTime = video.currentTime || 0;
+                const pool = window.__zentubeTimedComments;
+                if (!pool || pool.length === 0) return;
 
-                // 1. タイムスタンプ付きコメント＆ユーザー保存弾幕の発射判定
-                if (window.__zentubeTimedComments && window.__zentubeTimedComments.length > 0 && video) {
-                    if (Math.abs(curTime - lastVideoTime) > 3.5) {
-                        // シークされた場合は現在時刻より後のコメントを再有効化
-                        window.__zentubeTimedComments.forEach(c => {
-                            c.__fired = (c.timeSeconds < curTime - 0.5);
-                        });
-                    }
-                    lastVideoTime = curTime;
-
-                    for (const c of window.__zentubeTimedComments) {
-                        if (!c.__fired && c.timeSeconds >= curTime - 1.2 && c.timeSeconds <= curTime + 0.6) {
-                            c.__fired = true;
-                            spawnDanmaku(c.text, c.color || '#FFFFFF', Boolean(c.isUser));
+                // 時間のないコメントに、動画全体へ均等に散らした「流す時間」を割り当てる（長さが分かってから1回だけ）
+                const dur = video.duration;
+                if (!window.__zentubeDmScheduled) {
+                    // 動画より長い時間（時刻などを書いたコメント）は時間指定として扱わない
+                    if (isFinite(dur) && dur > 0) pool.forEach(c => { if (c.timeSeconds > dur) c.timeSeconds = -1; });
+                    const untimed = pool.filter(c => c.timeSeconds < 0);
+                    if (untimed.length === 0 || (isFinite(dur) && dur > 0)) {
+                        if (untimed.length > 0) {
+                            const start = Math.min(4, dur * 0.03);
+                            const end = dur * 0.97;
+                            const step = (end - start) / untimed.length;
+                            untimed.forEach((c, i) => { c.at = start + step * (i + 0.15 + Math.random() * 0.7); });
+                        }
+                        pool.forEach(c => { if (c.timeSeconds >= 0) c.at = c.timeSeconds; });
+                        pool.sort((a, b) => a.at - b.at);
+                        window.__zentubeDmScheduled = true;
+                        lastVideoTime = curTime;
+                    } else if (dur === Infinity) {
+                        // 生配信など長さがない時は、時間なしのコメントを一定間隔で1回ずつ流す（繰り返さない）
+                        const now = performance.now();
+                        const intervalMs = window.__zentubeDanmakuStyle === 'bold' ? 1500 : (window.__zentubeDanmakuStyle === 'subtle' ? 3500 : 2300);
+                        if (now - lastDanmakuSpawn >= intervalMs) {
+                            lastDanmakuSpawn = now;
+                            const next = untimed.find(c => !c.__fired);
+                            if (next) { fireDanmaku(next); }
                         }
                     }
+                    if (!window.__zentubeDmScheduled) return;
                 }
 
-                // 2. 一般コメントプールから一定間隔で自然に弾幕を流す
-                const pool = window.__zentubeGeneralComments;
-                if (pool && pool.length > 0) {
-                    const now = performance.now();
-                    const intervalMs = window.__zentubeDanmakuStyle === 'bold' ? 750 : (window.__zentubeDanmakuStyle === 'subtle' ? 1750 : 1150);
-                    if (now - lastDanmakuSpawn >= intervalMs) {
-                        lastDanmakuSpawn = now;
-                        const item = pool[window.__zentubeGeneralCursor % pool.length];
-                        window.__zentubeGeneralCursor = (window.__zentubeGeneralCursor + 1) % pool.length;
-                        if (item && item.text) {
-                            spawnDanmaku(item.text, item.color || '#FFFFFF', false);
-                        }
-                    }
+                // 前回から今までの間に流す時間が来たコメントを、1回だけ流す。
+                // ・巻き戻した時：一度流れたものは出さない（まだ流れていないものだけ出る）
+                // ・大きく先へ飛ばした時：飛ばした区間の分はまとめて出さず、そこから先を流す
+                const delta = curTime - lastVideoTime;
+                if (lastVideoTime < 0 || delta < -0.3 || delta > 3) {
+                    lastVideoTime = curTime;
+                    return;
+                }
+                let spawned = 0;
+                for (const c of pool) {
+                    if (c.at > curTime) break;
+                    if (c.__fired || c.at <= lastVideoTime - 0.05) continue;
+                    if (spawned >= 4) break; // 同じ瞬間に集中した時は次の回に回す
+                    fireDanmaku(c);
+                    spawned++;
+                }
+                // 回しきれなかった分は次の回で拾うため、最後に流したところまでだけ進める
+                if (spawned >= 4) {
+                    const pending = pool.find(c => !c.__fired && c.at > lastVideoTime - 0.05 && c.at <= curTime);
+                    lastVideoTime = pending ? Math.max(lastVideoTime, pending.at - 0.01) : curTime;
+                } else {
+                    lastVideoTime = curTime;
                 }
             }
 
@@ -999,33 +1030,38 @@ public static class ZenPlayerScript
                 window.__zentubeDanmakuStyle = style || 'off';
                 if (window.__zentubeDanmakuStyle === 'off') {
                     const layer = document.getElementById(danmakuLayerId);
-                    if (layer) layer.innerHTML = '';
+                    if (layer) layer.replaceChildren(); // YouTube では innerHTML への代入が禁止されているため
                 }
                 applyState();
             };
 
             window.loadZenTubeDanmakuPool = function(comments) {
                 const layer = document.getElementById(danmakuLayerId);
-                if (layer) layer.innerHTML = '';
-                window.__zentubeTimedComments = [];
-                window.__zentubeGeneralComments = [];
-                window.__zentubeGeneralCursor = 0;
+                if (layer) layer.replaceChildren(); // YouTube では innerHTML への代入が禁止されているため
+                // 同じ動画のコメントを読み直した時（埋め込みの準備完了で送り直された時など）も、
+                // 一度流れた文面は二度と出さない
+                const shown = window.__zentubeDmShownText || new Set();
+                const pool = [];
                 lastVideoTime = -1;
+                window.__zentubeDmScheduled = false;
 
-                if (!Array.isArray(comments)) return;
-                for (const c of comments) {
-                    const t = Number(c.TimeSeconds !== undefined ? c.TimeSeconds : c.timeSeconds);
-                    const txt = c.Text || c.text || '';
-                    const col = c.Color || c.color || '#FFFFFF';
-                    const usr = Boolean(c.IsUser !== undefined ? c.IsUser : c.isUser);
-                    if (!txt) continue;
-
-                    if (!isNaN(t) && t >= 0) {
-                        window.__zentubeTimedComments.push({ timeSeconds: t, text: txt, color: col, isUser: usr, __fired: false });
-                    } else {
-                        window.__zentubeGeneralComments.push({ text: txt, color: col });
+                if (Array.isArray(comments)) {
+                    for (const c of comments) {
+                        const t = Number(c.TimeSeconds !== undefined ? c.TimeSeconds : c.timeSeconds);
+                        const txt = c.Text || c.text || '';
+                        if (!txt) continue;
+                        pool.push({
+                            timeSeconds: (!isNaN(t) && t >= 0) ? t : -1,
+                            at: -1,
+                            text: txt,
+                            color: c.Color || c.color || '#FFFFFF',
+                            isUser: Boolean(c.IsUser !== undefined ? c.IsUser : c.isUser),
+                            __fired: shown.has(txt)
+                        });
                     }
                 }
+                window.__zentubeTimedComments = pool;
+                window.__zentubeDmShownText = shown;
             };
 
             window.setZenTubeAdBlock = function(enabled) {
@@ -1237,6 +1273,25 @@ public static class ZenPlayerScript
                     postToHost('doc_title:' + document.title);
                 }
             }
+
+            // ニコニコで再生できない画面を見つけたらアプリに知らせる
+            //  ・埋め込みが禁止された動画：埋め込みには「動画視聴ページへ」ボタンだけが出る → アプリが視聴ページを開き直す
+            //  ・センシティブ動画など：視聴ページに「視聴するにはログインが必要です」と出る → アプリが次の動画へ飛ばす
+            let prismilNicoReported = false;
+            function checkNicoBlocked() {
+                if (prismilNicoReported || prismilHasVideo || !document.body) return;
+                const text = document.body.innerText || '';
+                if (location.hostname.includes('embed.nicovideo.jp')) {
+                    if (text.indexOf('動画視聴ページへ') >= 0 && !document.querySelector('video')) {
+                        prismilNicoReported = true;
+                        postToHost('embed_blocked');
+                    }
+                } else if (text.indexOf('視聴するにはログインが必要です') >= 0) {
+                    prismilNicoReported = true;
+                    postToHost('need_login');
+                }
+            }
+            if (location.hostname.includes('nicovideo.jp')) setInterval(checkNicoBlocked, 700);
 
             if (inPrismil) {
                 window.addEventListener('message', (e) => {

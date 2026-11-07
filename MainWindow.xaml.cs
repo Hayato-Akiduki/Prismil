@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -70,6 +71,32 @@ public partial class MainWindow : Window
     private bool _isSearching;
     private bool _isLoadingMore;
     private bool _syncingSiteSelection;
+
+    // カード一覧（行単位で表示して、見えている行だけを作る）
+    /// <summary>今の一覧の動画すべて（絞り込み・並び替え後。ページに分ける前）</summary>
+    private List<VideoItem> _displayedCards = [];
+    /// <summary>今のページに出している動画</summary>
+    private List<VideoItem> _pageCards = [];
+    /// <summary>1ページに出す件数</summary>
+    private const int CardsPerPage = 40;
+    /// <summary>今のページ（0始まり）</summary>
+    private int _cardPage;
+    /// <summary>どの一覧を見ているか。変わったら1ページ目に戻す</summary>
+    private string _cardListKey = "";
+    private ObservableCollection<CardRow> _cardRows = [];
+    private int _cardColumns;
+    /// <summary>次にカード一覧を入れ替えるとき、一番上へ戻すか（新しい検索・読み込みのとき）</summary>
+    private bool _scrollCardsToTopOnNextSet;
+
+    // ホーム（おすすめ）の状態
+    /// <summary>今のホーム一覧がどのサイトのものか（null = 全サイト）</summary>
+    private SiteType? _homeSite;
+    /// <summary>サイト別おすすめの続きを読むための目印</summary>
+    private VideoSearchService.SiteSearchCursor? _homeCursor;
+    private int _homeGeneration;
+    private bool _isHomeLoading;
+    /// <summary>ボタン側でホームを読み込み直すとき、サイト切り替えによる自動の読み込み直しを止める</summary>
+    private bool _suppressHomeAutoReload;
 
     private WindowState _prevWindowState;
     private WindowStyle _prevWindowStyle;
@@ -157,8 +184,8 @@ public partial class MainWindow : Window
         _libraryService.Save();
         UpdateSidebarToggleButton();
 
-        // 全画面・ミニ窓の間は幅を動かさない（戻った時に今の状態が反映される）
-        if (_isFullScreen || _isMiniPlayerMode) return;
+        // 全画面・ミニ窓・シアターの間は幅を動かさない（戻った時に今の状態が反映される）
+        if (_isFullScreen || _isMiniPlayerMode || _isTheaterMode) return;
 
         var anim = new System.Windows.Media.Animation.DoubleAnimation
         {
@@ -207,7 +234,6 @@ public partial class MainWindow : Window
         (SiteType.SoundCloud, "SoundCloud", "#FF5500"),
         (SiteType.Twitch, "Twitch", "#9146FF"),
         (SiteType.Abema, "ABEMA", "#00B94B"),
-        (SiteType.Dailymotion, "Dailymotion", "#0066FF"),
         (SiteType.Podcast, "Podcast", "#8B5CF6"),
         (SiteType.Radio, "ネットラジオ", "#0EA5E9"),
     ];
@@ -238,7 +264,8 @@ public partial class MainWindow : Window
         bool enable = cb.IsChecked == true;
 
         // 全部OFFにはできないようにする（何も表示されなくなるため）
-        if (!enable && SiteToggleDefs.Length - _libraryService.DisabledSites.Count <= 1)
+        int enabledCount = SiteToggleDefs.Count(d => !_libraryService.DisabledSites.Contains(d.Site));
+        if (!enable && enabledCount <= 1)
         {
             cb.IsChecked = true;
             return;
@@ -258,11 +285,11 @@ public partial class MainWindow : Window
         (SiteType.YouTube, FilterYouTube), (SiteType.Niconico, FilterNiconico),
         (SiteType.Bilibili, FilterBilibili), (SiteType.SoundCloud, FilterSoundCloud),
         (SiteType.Twitch, FilterTwitch), (SiteType.Abema, FilterAbema),
-        (SiteType.Dailymotion, FilterDailymotion), (SiteType.Podcast, FilterPodcast),
+        (SiteType.Podcast, FilterPodcast),
         (SiteType.Radio, FilterRadio),
     ];
 
-    /// <summary>左の SITE FILTER で選ばれているサイト（「すべて表示」なら null）</summary>
+    /// <summary>左の「サイト別に見る」で選ばれているサイト（「すべてのサイト」なら null）</summary>
     private SiteType? SelectedSiteFilter()
     {
         foreach (var (site, radio) in SiteFilterRadios())
@@ -273,7 +300,7 @@ public partial class MainWindow : Window
     private static string SiteLabel(SiteType site) =>
         SiteToggleDefs.FirstOrDefault(d => d.Site == site).Label ?? site.ToString();
 
-    /// <summary>左の「SITE FILTER」と検索ボックス横のサイト選択から、読み込まないサイトを隠す</summary>
+    /// <summary>左の「サイト別に見る」と検索ボックス横のサイト選択から、読み込まないサイトを隠す</summary>
     private void UpdateSiteFilterVisibility()
     {
         foreach (var (site, radio) in SiteFilterRadios())
@@ -303,7 +330,7 @@ public partial class MainWindow : Window
         SyncSearchSiteComboFromFilter();
     }
 
-    /// <summary>左の SITE FILTER の選択を、検索ボックス横のサイト選択に反映する</summary>
+    /// <summary>左の「サイト別に見る」の選択を、検索ボックス横のサイト選択に反映する</summary>
     private void SyncSearchSiteComboFromFilter()
     {
         _syncingSiteSelection = true;
@@ -316,7 +343,7 @@ public partial class MainWindow : Window
         finally { _syncingSiteSelection = false; }
     }
 
-    /// <summary>検索ボックス横でサイトを選んだら、左の SITE FILTER も同じサイトにする（検索し直しはそちらで行う）</summary>
+    /// <summary>検索ボックス横でサイトを選んだら、左の「サイト別に見る」も同じサイトにする（検索し直しはそちらで行う）</summary>
     private void SearchSiteCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncingSiteSelection) return;
@@ -355,6 +382,7 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplySavedSettings(); // 前回の設定に戻す（最初の読み込みより先に）
         NavHome.IsChecked = true;
         AppVersionText.Text = $"Prismil v{UpdateService.CurrentVersionText}";
         var initWebTask = InitPlayerWebViewAsync();
@@ -427,7 +455,7 @@ public partial class MainWindow : Window
             var core = PlayerWebView.CoreWebView2;
 
             // 独自プレイヤー画面（https://player.prismil.local/player.html）を使えるようにする
-            PrismilPlayer.Install(core, Path.GetDirectoryName(dataDir)!);
+            PrismilPlayer.Install(core, env);
 
             await core.AddScriptToExecuteOnDocumentCreatedAsync(ZenPlayerScript.BootstrapScript);
             await UpdateYouTubeAdStripScriptAsync();
@@ -448,6 +476,25 @@ public partial class MainWindow : Window
                 if (msg == "ad_skipped")
                 {
                     _adBlockService.IncrementCount();
+                }
+                else if (msg == "need_login")
+                {
+                    SkipLoginRequiredVideo();
+                }
+                else if (msg == "embed_blocked")
+                {
+                    // 埋め込みが禁止されたニコニコ動画は、普通の視聴ページで開き直す
+                    var cur = _currentPlayingItem;
+                    if (cur != null && cur.Site == SiteType.Niconico && PrismilPlayer.IsPlayerUrl(core.Source))
+                        core.Navigate(cur.WatchUrl);
+                }
+                else if (msg == "theater_toggle")
+                {
+                    SetTheaterMode(!_isTheaterMode); // 動画の上で T キー
+                }
+                else if (msg == "theater_exit")
+                {
+                    SetTheaterMode(false); // 動画の上で Esc キー
                 }
                 else if (msg == "video_ended")
                 {
@@ -601,20 +648,61 @@ public partial class MainWindow : Window
     }
 
     // =========================================================================
-    // トレンド取得・Musicモード取得 ＆ 7サイト横断検索
+    // トレンド取得・Musicモード取得 ＆ 全サイト横断検索
     // =========================================================================
     private async Task LoadDiscoverFeedAsync(string? topicKeyword = null)
     {
         _lastTopicKeyword = topicKeyword ?? "";
-        ShowLoadingOverlay(
-            string.IsNullOrEmpty(_lastTopicKeyword)
-                ? "7サイトのトレンド・音楽・配信を取得中..."
-                : $"「{_lastTopicKeyword}」の動画を7サイトから取得中...",
-            "YouTube・ニコニコ・SoundCloud・bilibili・Twitch・ABEMA・Dailymotion から並列取得しています");
 
-        var items = _shortsFilterMode == 1
-            ? await _searchService.SearchAllShortsAsync(_lastTopicKeyword, limitPerSite: 15)
-            : await _searchService.GetDiscoverFeedAsync(_lastTopicKeyword, limitPerSite: 9);
+        // 左の「サイト別に見る」で1サイトを選んでいれば、そのサイトのおすすめだけを多めに取る
+        var site = SelectedSiteFilter();
+        int generation = ++_homeGeneration;
+        _homeSite = site;
+        _homeCursor = null;
+        if (NavHome.IsChecked == true) _scrollCardsToTopOnNextSet = true;
+
+        _isHomeLoading = true;
+        List<VideoItem> items;
+        try
+        {
+            if (site is SiteType s)
+            {
+                ShowLoadingOverlay(
+                    string.IsNullOrEmpty(_lastTopicKeyword)
+                        ? $"{SiteLabel(s)} のおすすめを取得中..."
+                        : $"「{_lastTopicKeyword}」の動画を{SiteLabel(s)}から取得中...",
+                    $"{SiteLabel(s)} の人気・話題の動画を集めています");
+                _homeCursor = new VideoSearchService.SiteSearchCursor(s, _lastTopicKeyword, shortsOnly: _shortsFilterMode == 1);
+                items = await _searchService.SearchSiteNextPageAsync(_homeCursor);
+            }
+            else
+            {
+                ShowLoadingOverlay(
+                    string.IsNullOrEmpty(_lastTopicKeyword)
+                        ? "5サイトのトレンド・音楽・配信を取得中..."
+                        : $"「{_lastTopicKeyword}」の動画を全サイトから取得中...",
+                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch から並列取得しています");
+                // 届いたサイトの結果から先に表示する
+                void OnPartial(List<VideoItem> partialItems)
+                {
+                    if (generation != _homeGeneration || NavHome.IsChecked != true) return;
+                    _libraryService.SyncCollectionFlags(partialItems);
+                    _discoverItems = partialItems;
+                    RefreshDisplayedCards(partial: true);
+                }
+                items = _shortsFilterMode == 1
+                    ? await _searchService.SearchAllShortsAsync(_lastTopicKeyword, limitPerSite: 15)
+                    : await _searchService.GetDiscoverFeedAsync(_lastTopicKeyword, limitPerSite: 9, onPartial: OnPartial);
+            }
+        }
+        finally
+        {
+            _isHomeLoading = false;
+        }
+
+        // 待っている間に別の読み込みが始まっていたら、この結果は使わない
+        if (generation != _homeGeneration) return;
+
         _libraryService.SyncCollectionFlags(items);
         _discoverItems = items;
 
@@ -681,13 +769,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 左の SITE FILTER（または検索ボックス横の選択）で1サイトを選んでいれば、そのサイトだけを検索する
+        // 左の「サイト別に見る」（または検索ボックス横の選択）で1サイトを選んでいれば、そのサイトだけを検索する
         var site = SelectedSiteFilter();
         int generation = ++_searchGeneration;
         _searchKeyword = query;
         _searchSite = site;
         _siteSearchCursor = null;
         _allSearchCursors.Clear();
+        _scrollCardsToTopOnNextSet = true;
 
         _isSearching = true;
         List<VideoItem> results;
@@ -708,10 +797,18 @@ public partial class MainWindow : Window
             {
                 ShowLoadingOverlay(
                     $"「{query}」を全サイトで検索中...",
-                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch・ABEMA・Dailymotion などを同時に検索しています");
+                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch などを同時に検索しています");
+                // 届いたサイトの結果から先に表示する
+                void OnPartial(List<VideoItem> partialItems)
+                {
+                    if (generation != _searchGeneration || NavSearch.IsChecked != true) return;
+                    _libraryService.SyncCollectionFlags(partialItems);
+                    _searchItems = partialItems;
+                    RefreshDisplayedCards(partial: true);
+                }
                 results = _shortsFilterMode == 1
                     ? await _searchService.SearchAllShortsAsync(query, limitPerSite: 20)
-                    : await _searchService.SearchAllAsync(query, limitPerSite: 20);
+                    : await _searchService.SearchAllAsync(query, limitPerSite: 20, onPartial: OnPartial);
             }
         }
         finally
@@ -739,13 +836,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>検索結果の続き（次のページ）を読み込んで、一覧の後ろに足す</summary>
-    private async Task LoadMoreSearchResultsAsync()
+    /// <summary>今の一覧（検索結果・ホームのおすすめ）の続きを読み込んで、後ろに足す</summary>
+    private async Task LoadMoreCurrentAsync()
     {
+        if (NavHome.IsChecked == true)
+        {
+            await LoadMoreHomeAsync();
+            return;
+        }
         if (_isLoadingMore || _isSearching || !CanLoadMoreSearch()) return;
         _isLoadingMore = true;
         int generation = _searchGeneration;
-        LoadMoreButton.IsEnabled = false;
-        LoadMoreButton.Content = "読み込み中...";
+        UpdatePager();
         try
         {
             var more = _siteSearchCursor != null
@@ -762,36 +864,140 @@ public partial class MainWindow : Window
         finally
         {
             _isLoadingMore = false;
-            LoadMoreButton.IsEnabled = true;
-            LoadMoreButton.Content = "▼ もっと読み込む";
-            UpdateLoadMoreButton();
+            UpdatePager();
         }
     }
 
-    private async void LoadMoreButton_Click(object sender, RoutedEventArgs e) =>
-        await LoadMoreSearchResultsAsync();
-
-    /// <summary>検索結果を一番下近くまでスクロールしたら、続きを自動で読み込む</summary>
-    private async void CardsScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    /// <summary>サイト別おすすめの続きを読み込んで、一覧の後ろに足す</summary>
+    private async Task LoadMoreHomeAsync()
     {
-        if (!ReferenceEquals(e.OriginalSource, CardsScrollViewer)) return; // 中の部品のスクロールは無視
-        if (e.VerticalChange <= 0) return; // 下方向へのスクロールのときだけ
-        if (LoadMoreButton.Visibility != Visibility.Visible) return;
-        if (e.VerticalOffset + e.ViewportHeight < e.ExtentHeight - 400) return;
-        await LoadMoreSearchResultsAsync();
+        var cursor = _homeCursor;
+        if (_isLoadingMore || _isHomeLoading || cursor == null || !cursor.HasMore) return;
+        _isLoadingMore = true;
+        int generation = _homeGeneration;
+        UpdatePager();
+        try
+        {
+            var more = await _searchService.SearchSiteNextPageAsync(cursor);
+            if (generation != _homeGeneration) return;
+
+            _libraryService.SyncCollectionFlags(more);
+            _discoverItems = [.. _discoverItems, .. more];
+            RefreshDisplayedCards();
+        }
+        finally
+        {
+            _isLoadingMore = false;
+            UpdatePager();
+        }
     }
 
-    private void UpdateLoadMoreButton()
+    /// <summary>今の一覧に、まだ読み込める続きがあるか</summary>
+    private bool CanLoadMoreCurrent()
     {
-        bool inSearch = NavSearch.IsChecked == true && _activeCustomPlaylist == null && _activeSubscribedChannel == null;
-        LoadMoreButton.Visibility = inSearch && _searchItems.Count > 0 && CanLoadMoreSearch()
-            ? Visibility.Visible : Visibility.Collapsed;
+        if (_activeCustomPlaylist != null || _activeSubscribedChannel != null) return false;
+        if (NavSearch.IsChecked == true) return _searchItems.Count > 0 && CanLoadMoreSearch();
+        if (NavHome.IsChecked == true) return _discoverItems.Count > 0 && _homeCursor?.HasMore == true;
+        return false;
     }
+
+    private int CardPageCount => Math.Max(1, (_displayedCards.Count + CardsPerPage - 1) / CardsPerPage);
+
+    /// <summary>指定したページへ移る。まだ読み込んでいないページなら、続きを読み込んでから移る</summary>
+    private async Task GoToPageAsync(int page)
+    {
+        if (page < 0 || _isLoadingMore) return;
+
+        // 絞り込みで減ることがあるので、足りるまで数回まで読み込む
+        for (int tries = 0; tries < 4 && _displayedCards.Count <= page * CardsPerPage && CanLoadMoreCurrent(); tries++)
+        {
+            int before = _displayedCards.Count;
+            await LoadMoreCurrentAsync();
+            if (_displayedCards.Count == before && !CanLoadMoreCurrent()) break;
+        }
+
+        _cardPage = Math.Clamp(page, 0, CardPageCount - 1);
+        _scrollCardsToTopOnNextSet = true;
+        RefreshDisplayedCards();
+    }
+
+    private async void PagerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: int page }) await GoToPageAsync(page);
+    }
+
+    /// <summary>一覧の下の「前へ・ページ番号・次へ」を作り直す</summary>
+    private void UpdatePager()
+    {
+        PagerPanel.Children.Clear();
+        int pageCount = CardPageCount;
+        bool canMore = CanLoadMoreCurrent();
+        if (_displayedCards.Count == 0 || (pageCount <= 1 && !canMore))
+        {
+            PagerBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+        PagerBar.Visibility = Visibility.Visible;
+
+        AddPagerButton("‹ 前へ", _cardPage - 1, _cardPage > 0 && !_isLoadingMore);
+
+        // 最初・最後のページと、今のページの前後2ページを出す（間は「…」）
+        var pages = new SortedSet<int> { 0, pageCount - 1 };
+        for (int i = _cardPage - 2; i <= _cardPage + 2; i++)
+            if (i >= 0 && i < pageCount) pages.Add(i);
+        int prev = -1;
+        foreach (int pg in pages)
+        {
+            if (prev >= 0 && pg > prev + 1) AddPagerEllipsis();
+            AddPagerButton((pg + 1).ToString(), pg, !_isLoadingMore, current: pg == _cardPage);
+            prev = pg;
+        }
+        if (canMore) AddPagerEllipsis(); // まだ先のページがある
+
+        AddPagerButton(_isLoadingMore ? "読み込み中…" : "次へ ›", _cardPage + 1,
+            !_isLoadingMore && (_cardPage < pageCount - 1 || canMore));
+    }
+
+    private void AddPagerButton(string text, int page, bool enabled, bool current = false)
+    {
+        var btn = new Button
+        {
+            Content = text,
+            Tag = page,
+            Style = (Style)FindResource(current ? "PrimaryBtn" : "ActionBtn"),
+            Margin = new Thickness(3, 0, 3, 0),
+            Padding = new Thickness(12, 6, 12, 6),
+            MinWidth = 38,
+            IsEnabled = enabled || current,
+            IsHitTestVisible = !current,
+        };
+        btn.Click += PagerButton_Click;
+        PagerPanel.Children.Add(btn);
+    }
+
+    private void AddPagerEllipsis() =>
+        PagerPanel.Children.Add(new TextBlock
+        {
+            Text = "…",
+            Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 4, 0),
+        });
 
     /// <summary>
-    /// 検索画面で SITE FILTER を切り替えたら、そのサイト（または全サイト）で検索し直す。
+    /// 検索画面で「サイト別に見る」を切り替えたら、そのサイト（または全サイト）で検索し直す。
     /// 表示だけ絞り込むと、全サイト検索で取れた少しの件数しか出ないため。
     /// </summary>
+    /// <summary>ホーム画面で「サイト別に見る」を切り替えたら、そのサイト（または全サイト）のおすすめを読み込み直す</summary>
+    private async Task<bool> ReloadHomeIfSiteChangedAsync()
+    {
+        if (_suppressHomeAutoReload || _isHomeLoading || NavHome.IsChecked != true) return false;
+        if (_activeCustomPlaylist != null || _activeSubscribedChannel != null) return false;
+        if (SelectedSiteFilter() == _homeSite) return false;
+        await LoadDiscoverFeedAsync(_lastTopicKeyword);
+        return true;
+    }
+
     private async Task<bool> ResearchIfSiteChangedAsync()
     {
         if (_isSearching || NavSearch.IsChecked != true) return false;
@@ -804,7 +1010,8 @@ public partial class MainWindow : Window
     // =========================================================================
     // カード一覧のフィルタリング・ソート・表示更新
     // =========================================================================
-    private void RefreshDisplayedCards()
+    /// <param name="partial">まだ読み込み中のサイトがある途中経過の表示か</param>
+    private void RefreshDisplayedCards(bool partial = false)
     {
         if (!IsLoaded) return;
 
@@ -871,12 +1078,16 @@ public partial class MainWindow : Window
         else
         {
             source = _discoverItems;
-            headerTitle = string.IsNullOrEmpty(_lastTopicKeyword)
-                ? "🔥 7サイト横断トレンド"
-                : $"🔥 トピック: {_lastTopicKeyword}";
+            headerTitle = _homeSite is SiteType hs
+                ? string.IsNullOrEmpty(_lastTopicKeyword)
+                    ? $"🔥 {SiteLabel(hs)} のおすすめ"
+                    : $"🔥 トピック: {_lastTopicKeyword}（{SiteLabel(hs)}）"
+                : string.IsNullOrEmpty(_lastTopicKeyword)
+                    ? "🔥 5サイト横断トレンド"
+                    : $"🔥 トピック: {_lastTopicKeyword}";
         }
 
-        // サイト絞り込みフィルター
+        // サイト別に見る（選んだサイトだけを表示）
         if (FilterYouTube.IsChecked == true)
             source = source.Where(x => x.Site == SiteType.YouTube);
         else if (FilterNiconico.IsChecked == true)
@@ -893,8 +1104,6 @@ public partial class MainWindow : Window
             source = source.Where(x => x.Site == SiteType.Twitch);
         else if (FilterAbema.IsChecked == true)
             source = source.Where(x => x.Site == SiteType.Abema);
-        else if (FilterDailymotion.IsChecked == true)
-            source = source.Where(x => x.Site == SiteType.Dailymotion);
 
         // ショート動画 3段階フィルター（お気に入り・後で見る・カスタムプレイリスト以外で有効）
         if (!isCustomPlaylist && NavFavorites.IsChecked != true && NavWatchLater.IsChecked != true)
@@ -916,12 +1125,39 @@ public partial class MainWindow : Window
         };
 
         var finalList = source.ToList();
-        VideoCardsControl.ItemsSource = finalList;
+
+        // 途中経過（まだ読み込み中のサイトがある）で1件も無ければ、読み込み中の表示のまま待つ
+        if (partial)
+        {
+            if (finalList.Count == 0) return;
+            HideLoadingOverlay();
+        }
+
+        // 見ている一覧が変わったら（別の検索・画面・サイト・並び順など）1ページ目に戻す
+        string listKey = string.Join("|", headerTitle, SelectedSiteFilter(), SortCombo.SelectedIndex, _shortsFilterMode,
+            _searchGeneration, _homeGeneration, _activeCustomPlaylist?.Name, _activeSubscribedChannel?.UniqueKey);
+        if (listKey != _cardListKey)
+        {
+            _cardListKey = listKey;
+            _cardPage = 0;
+            _scrollCardsToTopOnNextSet = true;
+        }
+
+        _displayedCards = finalList;
+        int pageCount = CardPageCount;
+        _cardPage = Math.Clamp(_cardPage, 0, pageCount - 1);
+        SetCardItems(finalList.Skip(_cardPage * CardsPerPage).Take(CardsPerPage).ToList());
+
         ViewHeaderTitle.Text = headerTitle;
-        ViewHeaderCount.Text = $"{finalList.Count} 件";
+        bool canMore = CanLoadMoreCurrent();
+        string countText = $"{finalList.Count} 件";
+        if (pageCount > 1 || canMore)
+            countText += $"・{_cardPage + 1} / {pageCount}{(canMore ? "+" : "")} ページ";
+        if (partial) countText += "（ほかのサイトを読み込み中…）";
+        ViewHeaderCount.Text = countText;
 
         BtnClearHistory.Visibility = showClearHistory ? Visibility.Visible : Visibility.Collapsed;
-        UpdateLoadMoreButton();
+        UpdatePager();
         BtnPlayAllPlaylist.Visibility = isCustomPlaylist && finalList.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         BtnDeletePlaylist.Visibility = isCustomPlaylist ? Visibility.Visible : Visibility.Collapsed;
         BtnUnsubscribeChannel.Visibility = isSingleChannel && _activeSubscribedChannel != null &&
@@ -946,7 +1182,7 @@ public partial class MainWindow : Window
                 else if (NavSearch.IsChecked == true && string.IsNullOrEmpty(_lastSearchQuery))
                     ShowEmptyState("キーワードを入力して横断検索", "上の検索バーから YouTube・ニコニコ動画・bilibili をまとめて検索できます");
                 else
-                    ShowEmptyState("該当する動画が見つかりませんでした", "別のキーワードやサイトフィルターをお試しください");
+                    ShowEmptyState("該当する動画が見つかりませんでした", "別のキーワードを試すか、左の「サイト別に見る」で別のサイトを選んでください");
             }
             else
             {
@@ -957,6 +1193,71 @@ public partial class MainWindow : Window
         RefreshSideQueue();
     }
 
+    /// <summary>今の一覧の幅に、カードが横に何枚並ぶか</summary>
+    private int ComputeCardColumns()
+    {
+        const double cardWidth = 278 + 12; // カード幅 + 左右の余白
+        double width = VideoCardsControl.ActualWidth - 40 - SystemParameters.VerticalScrollBarWidth;
+        return width <= 0 ? Math.Max(_cardColumns, 1) : Math.Max(1, (int)(width / cardWidth));
+    }
+
+    /// <summary>
+    /// カード一覧を入れ替える。前の一覧の後ろに足しただけ（もっと読み込む）なら、増えた行だけを足す。
+    /// </summary>
+    private void SetCardItems(List<VideoItem> list)
+    {
+        int cols = ComputeCardColumns();
+        int oldCount = _pageCards.Count;
+        bool isAppend = cols == _cardColumns && oldCount > 0 && list.Count >= oldCount &&
+                        ReferenceEquals(VideoCardsControl.ItemsSource, _cardRows) &&
+                        list.Take(oldCount).SequenceEqual(_pageCards, ReferenceEqualityComparer.Instance);
+
+        if (isAppend)
+        {
+            if (list.Count > oldCount)
+            {
+                // 最後の行が埋まっていなければ、その行から作り直す
+                int start = oldCount;
+                if (_cardRows.Count > 0 && _cardRows[^1].Items.Count < cols)
+                {
+                    start -= _cardRows[^1].Items.Count;
+                    _cardRows.RemoveAt(_cardRows.Count - 1);
+                }
+                foreach (var row in BuildCardRows(list, start, cols))
+                    _cardRows.Add(row);
+            }
+        }
+        else
+        {
+            _cardRows = new ObservableCollection<CardRow>(BuildCardRows(list, 0, cols));
+            VideoCardsControl.ItemsSource = _cardRows;
+        }
+
+        _pageCards = list;
+        _cardColumns = cols;
+
+        if (_scrollCardsToTopOnNextSet)
+        {
+            _scrollCardsToTopOnNextSet = false;
+            (VideoCardsControl.Template?.FindName("CardsScrollViewer", VideoCardsControl) as ScrollViewer)?.ScrollToTop();
+        }
+    }
+
+    private static IEnumerable<CardRow> BuildCardRows(List<VideoItem> list, int start, int cols)
+    {
+        for (int i = start; i < list.Count; i += cols)
+            yield return new CardRow(list.GetRange(i, Math.Min(cols, list.Count - i)));
+    }
+
+    /// <summary>ウィンドウの幅が変わって横に並ぶ枚数が変わったら、行を組み直す</summary>
+    private void VideoCardsControl_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged || ComputeCardColumns() == _cardColumns) return;
+        var list = _pageCards;
+        _pageCards = [];
+        SetCardItems(list);
+    }
+
     private void RefreshSideQueue()
     {
         if (SideQueueItemsControl == null) return;
@@ -965,10 +1266,20 @@ public partial class MainWindow : Window
         {
             "WatchLater" => _libraryService.WatchLater,
             "Favorites" => _libraryService.Favorites,
-            _ => (VideoCardsControl.ItemsSource as IEnumerable<VideoItem>) ?? _discoverItems
+            // 次に再生：検索・一覧の続き ＋ 視聴履歴をもとにしたおすすめ（まだ作れていない間は今の一覧）
+            _ => _upNext.Count > 0 && _upNextKey == _currentPlayingItem?.UniqueKey
+                ? _upNext
+                : (_displayedCards.Count > 0 ? _displayedCards : _discoverItems)
         };
 
-        SideQueueItemsControl.ItemsSource = queueSource.ToList();
+        bool showComments = _activeQueueTab == "Comments";
+        CommentsPanel.Visibility = showComments ? Visibility.Visible : Visibility.Collapsed;
+        SideQueueItemsControl.Visibility = showComments ? Visibility.Collapsed : Visibility.Visible;
+        BtnQueueComments.BorderBrush = showComments
+            ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
+            : NeutralBorderBrush;
+        if (showComments) EnsureCommentsLoaded();
+        else SideQueueItemsControl.ItemsSource = queueSource.ToList();
 
         BtnQueueCurrent.BorderBrush = _activeQueueTab == "Current"
             ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
@@ -979,6 +1290,97 @@ public partial class MainWindow : Window
         BtnQueueFavorites.BorderBrush = _activeQueueTab == "Favorites"
             ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
             : NeutralBorderBrush;
+    }
+
+    // =========================================================================
+    // ⏭ 次に再生（連続再生キュー）
+    // 自分で検索・表示していた一覧の続きと、再生中の動画や最近の視聴履歴の関連動画（YouTube・ニコニコ）を
+    // 交互に並べる。見たことのある動画のおすすめは出さない。動画が変わるたびに作り直す
+    // =========================================================================
+    private readonly RecommendationService _recommendationService = new();
+    private List<VideoItem> _upNext = [];
+    private string? _upNextKey;               // どの動画のために作ったキューか
+    private List<VideoItem> _upNextSourceList = [];  // 「検索・一覧」の元になる一覧
+    private int _upNextSourceIndex = -1;      // その一覧の中で最後に再生した位置
+
+    private const string ReasonSearch = "🔍 検索・一覧";
+    private const string ReasonRelated = "✨ おすすめ";
+    private const string ReasonHistory = "🕘 履歴から";
+
+    private async Task BuildUpNextAsync(VideoItem current)
+    {
+        // 「検索・一覧」の元：今表示している一覧。再生した動画がその中にあれば、その次から並べる
+        var shown = _displayedCards.Count > 0 ? _displayedCards : _discoverItems;
+        int idxInShown = shown.FindIndex(x => x.UniqueKey == current.UniqueKey);
+        if (idxInShown >= 0)
+        {
+            _upNextSourceList = [.. shown];
+            _upNextSourceIndex = idxInShown;
+        }
+        else if (_upNextSourceList.Count == 0)
+        {
+            _upNextSourceList = [.. shown];
+            _upNextSourceIndex = -1;
+        }
+        var searchPart = _upNextSourceList.Skip(_upNextSourceIndex + 1)
+            .Where(x => x.UniqueKey != current.UniqueKey)
+            .Take(30).ToList();
+
+        // おすすめ：再生中の動画の関連動画 ＋ 最近見た動画（2本）の関連動画
+        var watched = new HashSet<string>(_libraryService.History.Select(h => h.UniqueKey)) { current.UniqueKey };
+        var recentSeeds = _libraryService.History
+            .Where(h => h.UniqueKey != current.UniqueKey && RecommendationService.Supports(h))
+            .Take(2).ToList();
+
+        var currentTask = _recommendationService.GetRelatedAsync(current);
+        var seedTasks = recentSeeds.Select(s => _recommendationService.GetRelatedAsync(s)).ToList();
+        List<VideoItem> related;
+        List<List<VideoItem>> fromHistory;
+        try
+        {
+            related = await currentTask;
+            fromHistory = [.. await Task.WhenAll(seedTasks)];
+        }
+        catch
+        {
+            related = [];
+            fromHistory = [];
+        }
+        if (_currentPlayingItem?.UniqueKey != current.UniqueKey) return; // 待っている間に別の動画になった
+
+        var recPart = new List<VideoItem>();
+        var used = new HashSet<string>(searchPart.Select(x => x.UniqueKey));
+        void AddRec(VideoItem v, string reason)
+        {
+            if (watched.Contains(v.UniqueKey) || !used.Add(v.UniqueKey)) return;
+            if (_shortsFilterMode == 0 && v.IsShortVideo) return; // ショート除外中は出さない
+            v.QueueReason = reason;
+            recPart.Add(v);
+        }
+        // 再生中の動画の関連を中心に、履歴の関連を3本に1本くらい混ぜる
+        int ri = 0, hi = 0;
+        var historyFlat = fromHistory.SelectMany(l => l).ToList();
+        while (ri < related.Count || hi < historyFlat.Count)
+        {
+            for (int k = 0; k < 2 && ri < related.Count; k++) AddRec(related[ri++], ReasonRelated);
+            if (hi < historyFlat.Count) AddRec(historyFlat[hi++], ReasonHistory);
+            if (recPart.Count >= 40) break;
+        }
+
+        foreach (var s in searchPart) s.QueueReason = ReasonSearch;
+
+        // 交互に並べる（おすすめ → 検索・一覧 → …）
+        var queue = new List<VideoItem>();
+        for (int i = 0; i < Math.Max(recPart.Count, searchPart.Count); i++)
+        {
+            if (i < recPart.Count) queue.Add(recPart[i]);
+            if (i < searchPart.Count) queue.Add(searchPart[i]);
+        }
+
+        _libraryService.SyncCollectionFlags(queue);
+        _upNext = queue;
+        _upNextKey = current.UniqueKey;
+        if (_activeQueueTab == "Current") RefreshSideQueue();
     }
 
     private void UpdateLibraryBadges()
@@ -993,8 +1395,51 @@ public partial class MainWindow : Window
     // =========================================================================
     // 動画再生 ＆ クリーンプレイヤー制御
     // =========================================================================
+    // ログインが必要な動画を続けて飛ばした回数（全部ログインが必要な時に延々と飛ばし続けないため）
+    private int _loginSkipStreak;
+    private bool _isSkippingForLogin;
+    private System.Windows.Threading.DispatcherTimer? _noticeTimer;
+
+    /// <summary>ログインしないと見られないニコニコ動画は再生せず、次の動画へ飛ばす</summary>
+    private void SkipLoginRequiredVideo()
+    {
+        var item = _currentPlayingItem;
+        if (item == null || item.Site != SiteType.Niconico) return;
+
+        bool hasNext = SideQueueItemsControl.ItemsSource is IList<VideoItem> list && list.Count > 1;
+        if (!hasNext || _loginSkipStreak >= 5)
+        {
+            ShowNotice("この動画はログインが必要なため再生できません");
+            return;
+        }
+
+        _loginSkipStreak++;
+        ShowNotice($"「{item.Title}」はログインが必要なため飛ばしました");
+        _isSkippingForLogin = true;
+        try { PlayNextInQueue(step: 1); }
+        finally { _isSkippingForLogin = false; }
+    }
+
+    private void ShowNotice(string text)
+    {
+        NoticeToastText.Text = text;
+        NoticeToast.Visibility = Visibility.Visible;
+        _noticeTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _noticeTimer.Stop();
+        _noticeTimer.Tick -= NoticeTimer_Tick;
+        _noticeTimer.Tick += NoticeTimer_Tick;
+        _noticeTimer.Start();
+    }
+
+    private void NoticeTimer_Tick(object? sender, EventArgs e)
+    {
+        _noticeTimer?.Stop();
+        NoticeToast.Visibility = Visibility.Collapsed;
+    }
+
     private void PlayVideo(VideoItem item, bool forceZenMode = true)
     {
+        if (!_isSkippingForLogin) _loginSkipStreak = 0;
         _libraryService.SyncItemFlags(item);
         _currentPlayingItem = item;
         _libraryService.AddToHistory(item);
@@ -1074,6 +1519,7 @@ public partial class MainWindow : Window
         SyncCommentsWindow(item);
 
         _ = LoadAndInjectDanmakuForVideoAsync(item);
+        _ = BuildUpNextAsync(item);
     }
 
     // =========================================================================
@@ -1086,15 +1532,23 @@ public partial class MainWindow : Window
             // 流すのはサイト側のコメント（YouTubeコメント・ライブチャット・公式弾幕）だけ
             var combined = new List<DanmakuComment>();
 
+            // 新しい動画のページに、前の動画のコメントが送られないように先に空にしておく
+            _currentDanmakuPoolJson = "[]";
+
             if (item.Site == SiteType.YouTube)
             {
                 DanmakuStatusText.Text = "💬 YouTubeコメント取得中...";
-                var ytComments = await _searchService.GetYouTubeDanmakuCommentsAsync(item.Id, 80);
+                var ytComments = await _commentService.GetYouTubeDanmakuAsync(item.Id, item.DurationSeconds, count =>
+                {
+                    if (_currentPlayingItem?.UniqueKey == item.UniqueKey)
+                        DanmakuStatusText.Text = $"💬 コメント取得中... {count}件";
+                });
                 if (_currentPlayingItem?.UniqueKey != item.UniqueKey) return;
                 combined.AddRange(ytComments);
 
+                int timed = combined.Count(c => c.TimeSeconds >= 0);
                 DanmakuStatusText.Text = combined.Count > 0
-                    ? $"💬 同期中: {combined.Count}件"
+                    ? $"💬 {combined.Count}件を1回ずつ表示（時間指定 {timed}件）"
                     : "💬 ライブチャット連動中";
             }
             else if (item.Site == SiteType.Twitch || item.Site == SiteType.Abema)
@@ -1179,22 +1633,22 @@ public partial class MainWindow : Window
 
     private void UpdateAdBlockButtonUI()
     {
-        if (_adBlockService.IsEnabled)
-        {
-            BtnAdBlock.Content = $"🛡 広告ブロック: ON ({_adBlockService.BlockedCount})";
-            BtnAdBlock.BorderBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-            BtnAdBlock.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-        }
-        else
-        {
-            BtnAdBlock.Content = "🛡 広告ブロック: OFF";
-            BtnAdBlock.BorderBrush = NeutralBorderBrush;
-            BtnAdBlock.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
-        }
+        // 設定画面の「広告ブロック」の説明に、止めた数を出す
+        SetAdBlock.IsChecked = _adBlockService.IsEnabled;
+        SetAdBlockDesc.Text = _adBlockService.IsEnabled
+            ? $"広告やトラッカーを止め、動画の広告を自動で飛ばす（今回 {_adBlockService.BlockedCount} 件ブロック）"
+            : "広告やトラッカーを止め、動画の広告を自動で飛ばす（いまはOFF）";
     }
 
     private void PlayNextInQueue(int step = 1)
     {
+        // 「次に再生」の時の「前へ」は、ひとつ前に見た動画に戻る（キューは動画ごとに作り直すため）
+        if (step < 0 && _activeQueueTab == "Current" && _libraryService.History.Count > 1)
+        {
+            PlayVideo(_libraryService.History[1], forceZenMode: false);
+            return;
+        }
+
         if (SideQueueItemsControl.ItemsSource is not IList<VideoItem> list || list.Count == 0) return;
 
         int idx = -1;
@@ -1234,6 +1688,7 @@ public partial class MainWindow : Window
     {
         CardBrowserView.Visibility = Visibility.Collapsed;
         StatsDashboardView.Visibility = Visibility.Collapsed;
+        SettingsView.Visibility = Visibility.Collapsed;
         PlayerView.Visibility = Visibility.Visible;
         NowPlayingMiniCard.Visibility = Visibility.Collapsed;
         MusicPlayerDockBar.Visibility = Visibility.Collapsed;
@@ -1247,6 +1702,7 @@ public partial class MainWindow : Window
 
         PlayerView.Visibility = Visibility.Collapsed;
         StatsDashboardView.Visibility = Visibility.Collapsed;
+        SettingsView.Visibility = Visibility.Collapsed;
         CardBrowserView.Visibility = Visibility.Visible;
         BtnToggleViewMode.Content = "🎬 プレイヤー";
 
@@ -1264,6 +1720,7 @@ public partial class MainWindow : Window
 
         PlayerView.Visibility = Visibility.Collapsed;
         CardBrowserView.Visibility = Visibility.Collapsed;
+        SettingsView.Visibility = Visibility.Collapsed;
         StatsDashboardView.Visibility = Visibility.Visible;
         BtnToggleViewMode.Content = "🎬 プレイヤー";
 
@@ -1283,6 +1740,7 @@ public partial class MainWindow : Window
     {
         if (sender is RadioButton rb && rb.DataContext is CustomPlaylist pl)
         {
+            LeaveSiteMode();
             _activeCustomPlaylist = pl;
             _activeSubscribedChannel = null;
             SwitchToCardBrowserView();
@@ -1300,6 +1758,7 @@ public partial class MainWindow : Window
 
     private async Task OpenChannelViewAsync(SubscribedChannel ch)
     {
+        LeaveSiteMode();
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = ch;
         SwitchToCardBrowserView();
@@ -1565,20 +2024,13 @@ public partial class MainWindow : Window
             SidebarColumn.Width = new GridLength(0);
             HeaderRow.Height = new GridLength(0);
             PlayerControlBarRow.Height = new GridLength(0);
-            PlayerStudioBarRow.Height = new GridLength(0);
-            PlayerDanmakuBarRow.Height = new GridLength(0);
             SideQueueColumn.Width = new GridLength(0);
             MiniPlayerBarRow.Height = new GridLength(28);
         }
         else
         {
             MiniPlayerBarRow.Height = new GridLength(0);
-            SidebarColumn.Width = new GridLength(CurrentSidebarWidth);
-            HeaderRow.Height = new GridLength(62);
-            PlayerControlBarRow.Height = new GridLength(50);
-            PlayerStudioBarRow.Height = new GridLength(40);
-            PlayerDanmakuBarRow.Height = new GridLength(42);
-            SideQueueColumn.Width = _isSideQueueOpen ? new GridLength(320) : new GridLength(0);
+            ApplyPlayerLayout(); // シアターモードだった時はシアターの形に戻る
 
             MinWidth = 820;
             MinHeight = 520;
@@ -1600,6 +2052,14 @@ public partial class MainWindow : Window
         if (!IsLoaded) return;
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
+        // トレンド・検索以外（お気に入り・履歴・Musicモードなど）へ移ったら「サイト別に見る」モードを抜ける
+        if (sender != NavHome && sender != NavSearch) LeaveSiteMode();
+
+        if (NavSettings.IsChecked == true)
+        {
+            SwitchToSettingsView();
+            return;
+        }
 
         if (NavStats.IsChecked == true)
         {
@@ -1608,6 +2068,16 @@ public partial class MainWindow : Window
         }
 
         SwitchToCardBrowserView();
+
+        // 設定画面で読み込むサイトを変えていたら、離れる時に1回だけ読み込み直す
+        if (_siteSelectionChanged)
+        {
+            _siteSelectionChanged = false;
+            await ReloadAfterSiteChangeAsync();
+            if (NavHome.IsChecked == true || NavSearch.IsChecked == true ||
+                NavMusicMode.IsChecked == true || NavSubscriptionsFeed.IsChecked == true)
+                return;
+        }
 
         if (NavMusicMode.IsChecked == true)
         {
@@ -1622,9 +2092,133 @@ public partial class MainWindow : Window
         }
         else
         {
-            if (await ResearchIfSiteChangedAsync()) return;
+            if (await ResearchIfSiteChangedAsync() || await ReloadHomeIfSiteChangedAsync()) return;
             RefreshDisplayedCards();
         }
+    }
+
+    // =========================================================================
+    // ⚙ 設定画面（変えた設定は library.json に保存し、次の起動時に戻す）
+    // =========================================================================
+    private bool _applyingSettings; // 起動時に設定を戻している間は保存しない
+
+    private void OpenSettings_Click(object sender, RoutedEventArgs e)
+    {
+        MoreMenuPopup.IsOpen = false;
+        if (_isFullScreen) SetFullScreen(false);
+        if (_isTheaterMode) SetTheaterMode(false);
+        if (NavSettings.IsChecked == true) SwitchToSettingsView();
+        else NavSettings.IsChecked = true;
+    }
+
+    private void SwitchToSettingsView()
+    {
+        if (_isMiniPlayerMode) SetMiniPlayerMode(false);
+        PlayerView.Visibility = Visibility.Collapsed;
+        CardBrowserView.Visibility = Visibility.Collapsed;
+        StatsDashboardView.Visibility = Visibility.Collapsed;
+        SettingsView.Visibility = Visibility.Visible;
+        BtnToggleViewMode.Content = "🎬 プレイヤー";
+        if (_currentPlayingItem != null)
+        {
+            NowPlayingMiniCard.Visibility = Visibility.Visible;
+            MusicPlayerDockBar.Visibility = Visibility.Visible;
+        }
+        RefreshSettingsView();
+    }
+
+    /// <summary>設定画面のスイッチなどを、今の状態に合わせる</summary>
+    private void RefreshSettingsView()
+    {
+        SetAutoNext.IsChecked = _isAutoNext;
+        SetShuffle.IsChecked = _isShuffleMode;
+        SetMusicBgListen.IsChecked = _isMusicBgListen;
+        SetTopmost.IsChecked = Topmost;
+        _applyingSettings = true;
+        SetShortsCombo.SelectedIndex = _shortsFilterMode;
+        _applyingSettings = false;
+        UpdateAdBlockButtonUI();
+        SetHistoryDesc.Text = _libraryService.History.Count > 0
+            ? $"このPCに残っている視聴履歴（{_libraryService.History.Count}件）をすべて消す"
+            : "視聴履歴はありません";
+    }
+
+    /// <summary>設定画面のON/OFFスイッチ：それぞれ今までのボタンと同じ処理を呼ぶ</summary>
+    private void SettingSwitch_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox cb) return;
+        bool want = cb.IsChecked == true;
+        if (cb == SetAutoNext && want != _isAutoNext) AutoNextToggle_Click(cb, e);
+        else if (cb == SetShuffle && want != _isShuffleMode) ShuffleToggle_Click(cb, e);
+        else if (cb == SetMusicBgListen && want != _isMusicBgListen) MusicBgListenToggle_Click(cb, e);
+        else if (cb == SetAdBlock && want != _adBlockService.IsEnabled) AdBlockToggle_Click(cb, e);
+        else if (cb == SetTopmost && want != Topmost) PinTopmost_Click(cb, e);
+    }
+
+    private void ClearHistorySetting_Click(object sender, RoutedEventArgs e)
+    {
+        if (_libraryService.History.Count == 0) return;
+        var ok = MessageBox.Show($"視聴履歴（{_libraryService.History.Count}件）をすべて消しますか？元には戻せません。",
+            "Prismil", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (ok != MessageBoxResult.Yes) return;
+        _libraryService.ClearHistory();
+        RefreshSettingsView();
+    }
+
+    /// <summary>今の設定を保存する</summary>
+    private void SaveSettings()
+    {
+        if (_applyingSettings) return;
+        var s = _libraryService.Settings;
+        s.SpeedIndex = SpeedCombo.SelectedIndex;
+        s.AutoNext = _isAutoNext;
+        s.Shuffle = _isShuffleMode;
+        s.MusicBgListen = _isMusicBgListen;
+        s.AmbientIndex = AmbilightCombo.SelectedIndex;
+        s.GainIndex = AudioGainCombo.SelectedIndex;
+        s.PresetIndex = AudioPresetCombo.SelectedIndex;
+        s.DanmakuIndex = DanmakuStyleCombo.SelectedIndex;
+        s.ShortsMode = _shortsFilterMode;
+        s.SortIndex = SortCombo.SelectedIndex;
+        s.AdBlock = _adBlockService.IsEnabled;
+        s.Topmost = Topmost;
+        _libraryService.Save();
+    }
+
+    /// <summary>起動時：保存してある設定に戻す（画面の部品は今までと同じ処理を通して変える）</summary>
+    private void ApplySavedSettings()
+    {
+        var s = _libraryService.Settings;
+        _applyingSettings = true;
+        try
+        {
+            static void Pick(ComboBox cb, int index)
+            {
+                if (index >= 0 && index < cb.Items.Count) cb.SelectedIndex = index;
+            }
+            Pick(SpeedCombo, s.SpeedIndex);
+            Pick(AmbilightCombo, s.AmbientIndex);
+            Pick(AudioGainCombo, s.GainIndex);
+            Pick(AudioPresetCombo, s.PresetIndex);
+            Pick(DanmakuStyleCombo, s.DanmakuIndex);
+            Pick(SortCombo, s.SortIndex);
+
+            if (s.AutoNext != _isAutoNext) AutoNextToggle_Click(this, new RoutedEventArgs());
+            if (s.Shuffle != _isShuffleMode) ShuffleToggle_Click(this, new RoutedEventArgs());
+            if (s.MusicBgListen != _isMusicBgListen) MusicBgListenToggle_Click(this, new RoutedEventArgs());
+            if (s.Topmost != Topmost) PinTopmost_Click(this, new RoutedEventArgs());
+            _shortsFilterMode = Math.Clamp(s.ShortsMode, 0, 2);
+            _adBlockService.IsEnabled = s.AdBlock;
+            UpdateAdBlockButtonUI();
+        }
+        finally
+        {
+            _applyingSettings = false;
+        }
+
+        // ここから先、⚙メニューや設定画面で選び直した時も保存する
+        foreach (var cb in new[] { SpeedCombo, AmbilightCombo, AudioGainCombo, AudioPresetCombo, DanmakuStyleCombo, SortCombo })
+            cb.SelectionChanged += (_, _) => SaveSettings();
     }
 
     private void MusicModeButton_Click(object sender, RoutedEventArgs e)
@@ -1665,6 +2259,8 @@ public partial class MainWindow : Window
         BtnMusicBgListenToggle.BorderBrush = _isMusicBgListen
             ? new SolidColorBrush(Color.FromRgb(236, 72, 153))
             : new SolidColorBrush(Color.FromRgb(99, 102, 241));
+        SetMusicBgListen.IsChecked = _isMusicBgListen;
+        SaveSettings();
     }
 
     private async void DockEqPreset_Click(object sender, RoutedEventArgs e)
@@ -1702,11 +2298,53 @@ public partial class MainWindow : Window
         SwitchToPlayerView();
     }
 
+    // 「サイト別に見る」を画面の切り替えに合わせて黙って戻している最中か（その時は読み込み直さない）
+    private bool _silentSiteChange;
+
+    /// <summary>
+    /// 「サイト別に見る」は、そのサイトの動画を見るためのモード。
+    /// お気に入り・履歴・プレイリストなど別の画面へ移ったら、モードを抜けて「すべてのサイト」に戻す。
+    /// </summary>
+    private void LeaveSiteMode()
+    {
+        if (FilterAll.IsChecked == true) return;
+        _silentSiteChange = true;
+        try
+        {
+            FilterAll.IsChecked = true;
+            SyncSearchSiteComboFromFilter();
+        }
+        finally { _silentSiteChange = false; }
+    }
+
     private async void SiteFilter_Checked(object sender, RoutedEventArgs e)
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || _silentSiteChange) return;
         SyncSearchSiteComboFromFilter();
+        // 検索結果を表示中なら、そのサイト（または全サイト）で検索し直す
         if (await ResearchIfSiteChangedAsync()) return;
+        // Musicモードの中では、今まで通り曲の一覧をサイトで絞り込むだけ
+        if (NavMusicMode.IsChecked == true)
+        {
+            RefreshDisplayedCards();
+            return;
+        }
+
+        // サイトを選んだら、どの画面にいても、そのサイトのおすすめ動画の画面を開く
+        bool onHome = NavHome.IsChecked == true && _activeCustomPlaylist == null && _activeSubscribedChannel == null;
+        if (SelectedSiteFilter() != null && !onHome)
+        {
+            _activeCustomPlaylist = null;
+            _activeSubscribedChannel = null;
+            _suppressHomeAutoReload = true;
+            try { NavHome.IsChecked = true; }
+            finally { _suppressHomeAutoReload = false; }
+            SwitchToCardBrowserView();
+            await LoadDiscoverFeedAsync("");
+            return;
+        }
+
+        if (await ReloadHomeIfSiteChangedAsync()) return;
         RefreshDisplayedCards();
     }
 
@@ -1722,8 +2360,13 @@ public partial class MainWindow : Window
         string keyword = btn.Tag as string ?? "";
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
-        FilterAll.IsChecked = true;
-        NavHome.IsChecked = true;
+        _suppressHomeAutoReload = true;
+        try
+        {
+            FilterAll.IsChecked = true;
+            NavHome.IsChecked = true;
+        }
+        finally { _suppressHomeAutoReload = false; }
         SwitchToCardBrowserView();
         await LoadDiscoverFeedAsync(keyword);
     }
@@ -1733,18 +2376,22 @@ public partial class MainWindow : Window
         if (sender is not Button btn || btn.Tag is not string siteName) return;
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
-        NavHome.IsChecked = true;
+        _suppressHomeAutoReload = true;
+        try
+        {
+            NavHome.IsChecked = true;
+            if (siteName == "Twitch") FilterTwitch.IsChecked = true;
+            else if (siteName == "Abema") FilterAbema.IsChecked = true;
+            else if (siteName == "SoundCloud") FilterSoundCloud.IsChecked = true;
+        }
+        finally { _suppressHomeAutoReload = false; }
         SwitchToCardBrowserView();
 
-        if (_discoverItems.Count == 0 || !string.IsNullOrEmpty(_lastTopicKeyword))
-        {
+        // そのサイトのおすすめを読み込む（すでに表示中ならそのまま）
+        if (_homeSite != SelectedSiteFilter() || _discoverItems.Count == 0 || !string.IsNullOrEmpty(_lastTopicKeyword))
             await LoadDiscoverFeedAsync("");
-        }
-
-        if (siteName == "Twitch") FilterTwitch.IsChecked = true;
-        else if (siteName == "Abema") FilterAbema.IsChecked = true;
-        else if (siteName == "SoundCloud") FilterSoundCloud.IsChecked = true;
-        RefreshDisplayedCards();
+        else
+            RefreshDisplayedCards();
     }
 
     private async void RecentSearchChip_Click(object sender, RoutedEventArgs e)
@@ -1789,15 +2436,15 @@ public partial class MainWindow : Window
         byte bdG = (byte)Math.Clamp(40 + g * 0.42, 40, 180);
         byte bdB = (byte)Math.Clamp(58 + b * 0.42, 58, 195);
 
-        PlayerStudioBar.Background = new SolidColorBrush(Color.FromRgb(bgR, bgG, bgB));
-        PlayerStudioBar.BorderBrush = new SolidColorBrush(Color.FromRgb(bdR, bdG, bdB));
+        PlayerHeaderBar.Background = new SolidColorBrush(Color.FromArgb(0xB0, bgR, bgG, bgB));
         PlayerHeaderBar.BorderBrush = new SolidColorBrush(Color.FromRgb(bdR, bdG, bdB));
     }
 
+    private static readonly Brush PlayerHeaderDefaultBrush = new SolidColorBrush(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF));
+
     private void ResetNativeAmbilightTint()
     {
-        PlayerStudioBar.Background = Brushes.Transparent;
-        PlayerStudioBar.BorderBrush = NeutralBorderBrush;
+        PlayerHeaderBar.Background = PlayerHeaderDefaultBrush;
         PlayerHeaderBar.BorderBrush = NeutralBorderBrush;
         FadeOutAmbient();
     }
@@ -1941,6 +2588,8 @@ public partial class MainWindow : Window
             : NeutralBorderBrush;
         BtnShuffleToggle.BorderBrush = brush;
         BtnDockShuffle.BorderBrush = brush;
+        SetShuffle.IsChecked = _isShuffleMode;
+        SaveSettings();
     }
 
     private async void MirrorToggle_Click(object sender, RoutedEventArgs e)
@@ -2171,6 +2820,134 @@ public partial class MainWindow : Window
         _commentsWindow.Activate();
     }
 
+    // =========================================================================
+    // 💬 コメント一覧（右の欄。弾幕ではなく普通のコメント欄として読む）
+    // =========================================================================
+    private readonly CommentService _commentService = new();
+    private string? _commentsItemKey;      // いま一覧に出しているコメントの動画
+    private string? _commentsNext;         // 続きを読み込む時の値（YouTube）
+    private bool _commentsLoading;
+    private bool _commentsSortPopular;
+    private List<CommentEntry> _commentEntries = [];
+
+    /// <summary>上の「💬 コメント」ボタン：右の欄を開いてコメントのタブにする</summary>
+    private void ShowCommentsPanel_Click(object sender, RoutedEventArgs e)
+    {
+        // シアターモード中でも、押した時は右の欄を出す
+        _isSideQueueOpen = true;
+        if (!_isFullScreen && !_isMiniPlayerMode)
+        {
+            SideQueueColumn.Width = new GridLength(320);
+            SideQueueBorder.Visibility = Visibility.Visible;
+        }
+        _activeQueueTab = "Comments";
+        RefreshSideQueue();
+    }
+
+    /// <summary>再生中の動画のコメントがまだ出ていなければ読み込む</summary>
+    private void EnsureCommentsLoaded()
+    {
+        var item = _currentPlayingItem;
+        if (item == null)
+        {
+            ShowCommentEntries([], "動画を再生するとコメントが表示されます");
+            return;
+        }
+        if (_commentsItemKey == item.UniqueKey) return;
+        _ = LoadCommentsAsync(item, more: false);
+    }
+
+    private async Task LoadCommentsAsync(VideoItem item, bool more)
+    {
+        if (!more)
+        {
+            _commentsItemKey = item.UniqueKey;
+            _commentsNext = null;
+            _commentsSortPopular = false;
+            BtnCommentsSort.Content = "人気順";
+            BtnCommentsSort.Visibility = item.Site == SiteType.Niconico ? Visibility.Visible : Visibility.Collapsed;
+
+            if (!CommentService.Supports(item))
+            {
+                ShowCommentEntries([], item.Site is SiteType.Twitch or SiteType.Abema
+                    ? "ライブのチャットは「↗ サイトで見る」から見られます"
+                    : "このサイトのコメントは「↗ サイトで見る」から見られます");
+                return;
+            }
+            ShowCommentEntries([], "コメントを読み込み中...");
+        }
+        else if (_commentsLoading || _commentsNext == null) return;
+
+        _commentsLoading = true;
+        try
+        {
+            var page = await _commentService.GetAsync(item, more ? _commentsNext : null);
+            if (_commentsItemKey != item.UniqueKey) return; // 待っている間に別の動画になった
+
+            _commentsNext = page.Next;
+            if (more)
+            {
+                // 続きは今の一覧の後ろに足す（スクロール位置はそのまま）
+                _commentEntries.AddRange(page.Items);
+                foreach (var c in page.Items) _commentView.Add(c);
+                UpdateCommentsStatus(null);
+            }
+            else
+            {
+                ShowCommentEntries(page.Items, page.Items.Count == 0 ? page.Error ?? "コメントはまだありません" : null);
+            }
+        }
+        finally
+        {
+            _commentsLoading = false;
+        }
+    }
+
+    private System.Collections.ObjectModel.ObservableCollection<CommentEntry> _commentView = [];
+
+    private void ShowCommentEntries(List<CommentEntry> entries, string? message)
+    {
+        _commentEntries = entries;
+        IEnumerable<CommentEntry> view = _commentsSortPopular
+            ? entries.OrderByDescending(c => c.Likes).ThenBy(c => c.TimeSeconds)
+            : entries;
+        _commentView = new(view);
+        CommentsList.ItemsSource = _commentView;
+        if (_commentView.Count > 0) CommentsList.ScrollIntoView(_commentView[0]);
+        UpdateCommentsStatus(message);
+    }
+
+    private void UpdateCommentsStatus(string? message)
+    {
+        CommentsStatusText.Text = message ?? (_commentsNext != null
+            ? $"{_commentEntries.Count}件（下へスクロールで続きを表示）"
+            : $"{_commentEntries.Count}件");
+    }
+
+    private void CommentsList_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        // 下の方まで読んだら続きを読み込む
+        if (_commentsNext == null || _commentsLoading || _currentPlayingItem == null) return;
+        if (e.ExtentHeight > 0 && e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 200)
+            _ = LoadCommentsAsync(_currentPlayingItem, more: true);
+    }
+
+    private void CommentsSort_Click(object sender, RoutedEventArgs e)
+    {
+        _commentsSortPopular = !_commentsSortPopular;
+        BtnCommentsSort.Content = _commentsSortPopular ? "時間順" : "人気順";
+        ShowCommentEntries(_commentEntries, null);
+    }
+
+    /// <summary>コメントの時間をクリック：その場面へ移動</summary>
+    private void CommentTime_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: CommentEntry c } || !c.HasTime) return;
+        if (!_isWebViewReady || PlayerWebView.CoreWebView2 == null) return;
+        var sec = c.TimeSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _ = PlayerWebView.CoreWebView2.ExecuteScriptAsync($"if (window.prismilSeekTo) window.prismilSeekTo({sec});");
+    }
+
     /// <summary>コメント欄を開いたまま次の動画に進んだら、コメント欄もその動画に切り替える</summary>
     private void SyncCommentsWindow(VideoItem item)
     {
@@ -2184,6 +2961,7 @@ public partial class MainWindow : Window
     {
         _adBlockService.IsEnabled = !_adBlockService.IsEnabled;
         UpdateAdBlockButtonUI();
+        SaveSettings();
         await UpdateYouTubeAdStripScriptAsync(); // 次に開くページから有効/無効が切り替わる
         await ApplyZenModeToPlayerAsync();
     }
@@ -2207,27 +2985,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void BlockShortsToggle_Click(object sender, RoutedEventArgs e)
+    /// <summary>設定画面の「ショート動画」：0 除外 / 1 ショートだけ / 2 すべて</summary>
+    private async void SetShortsCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _shortsFilterMode = (_shortsFilterMode + 1) % 3;
-        switch (_shortsFilterMode)
-        {
-            case 0:
-                BtnBlockShorts.Content = "🚫 ショート除外";
-                BtnBlockShorts.BorderBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11));
-                BtnBlockShorts.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
-                break;
-            case 1:
-                BtnBlockShorts.Content = "📱 ショートのみ";
-                BtnBlockShorts.BorderBrush = new SolidColorBrush(Color.FromRgb(236, 72, 153));
-                BtnBlockShorts.Foreground = new SolidColorBrush(Color.FromRgb(244, 114, 182));
-                break;
-            default:
-                BtnBlockShorts.Content = "🎬 ショート: すべて";
-                BtnBlockShorts.BorderBrush = NeutralBorderBrush;
-                BtnBlockShorts.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
-                break;
-        }
+        if (!IsLoaded || _applyingSettings || SetShortsCombo.SelectedIndex < 0) return;
+        if (SetShortsCombo.SelectedIndex == _shortsFilterMode) return;
+        _shortsFilterMode = SetShortsCombo.SelectedIndex;
+        SaveSettings();
 
         await ApplyZenModeToPlayerAsync();
 
@@ -2320,7 +3084,7 @@ public partial class MainWindow : Window
 
     private void PlayRandomOne_Click(object sender, RoutedEventArgs e)
     {
-        if (VideoCardsControl.ItemsSource is IList<VideoItem> list && list.Count > 0)
+        if (_displayedCards is { Count: > 0 } list)
         {
             var picked = list[Random.Shared.Next(list.Count)];
             PlayVideo(picked);
@@ -2361,7 +3125,7 @@ public partial class MainWindow : Window
             .ToList();
         int totalCount = Math.Max(1, combined.Count);
 
-        // 2. 9ソース別利用バランス
+        // 2. 8ソース別利用バランス
         var siteDefinitions = new (SiteType Site, string Name, Brush Brush)[]
         {
             (SiteType.YouTube, "▶ YouTube", new SolidColorBrush(Color.FromRgb(239, 68, 68))),
@@ -2371,8 +3135,7 @@ public partial class MainWindow : Window
             (SiteType.Radio, "📻 ネットラジオ", new SolidColorBrush(Color.FromRgb(14, 165, 233))),
             (SiteType.Bilibili, "🅱 bilibili", new SolidColorBrush(Color.FromRgb(0, 161, 214))),
             (SiteType.Twitch, "🔴 Twitch", new SolidColorBrush(Color.FromRgb(145, 70, 255))),
-            (SiteType.Abema, "🟢 ABEMA", new SolidColorBrush(Color.FromRgb(16, 185, 129))),
-            (SiteType.Dailymotion, "🎬 Dailymotion", new SolidColorBrush(Color.FromRgb(0, 102, 255)))
+            (SiteType.Abema, "🟢 ABEMA", new SolidColorBrush(Color.FromRgb(16, 185, 129)))
         };
 
         var siteRows = siteDefinitions.Select(sd =>
@@ -2469,6 +3232,8 @@ public partial class MainWindow : Window
         BtnAutoNextToggle.BorderBrush = _isAutoNext
             ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
             : NeutralBorderBrush;
+        SetAutoNext.IsChecked = _isAutoNext;
+        SaveSettings();
     }
 
     private async void Screenshot_Click(object sender, RoutedEventArgs e)
@@ -2519,6 +3284,7 @@ public partial class MainWindow : Window
     {
         if (_isFullScreen) SetFullScreen(false);
         if (_isMiniPlayerMode) SetMiniPlayerMode(false);
+        if (_isTheaterMode) SetTheaterMode(false);
         SwitchToCardBrowserView();
     }
 
@@ -2592,10 +3358,8 @@ public partial class MainWindow : Window
     private void PinTopmost_Click(object sender, RoutedEventArgs e)
     {
         Topmost = !Topmost;
-        BtnPinTopmost.Content = Topmost ? "📌 最前面: ON" : "📌 最前面: OFF";
-        BtnPinTopmost.BorderBrush = Topmost
-            ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
-            : NeutralBorderBrush;
+        SetTopmost.IsChecked = Topmost;
+        SaveSettings();
     }
 
     private void FullScreenButton_Click(object sender, RoutedEventArgs e)
@@ -2704,7 +3468,89 @@ public partial class MainWindow : Window
                 SetMiniPlayerMode(false);
                 e.Handled = true;
             }
+            else if (_isTheaterMode)
+            {
+                SetTheaterMode(false);
+                e.Handled = true;
+            }
         }
+        else if (e.Key == Key.T && Keyboard.Modifiers == ModifierKeys.None &&
+                 PlayerView.Visibility == Visibility.Visible && Keyboard.FocusedElement is not TextBox)
+        {
+            SetTheaterMode(!_isTheaterMode);
+            e.Handled = true;
+        }
+    }
+
+    // =========================================================================
+    // 🎭 シアターモード：左のメニュー・検索欄・効果バー・右の欄を隠して、動画を横いっぱいに大きく見せる
+    // （全画面とちがってウィンドウのまま。タイトルと操作ボタンの段は残す）
+    // =========================================================================
+    private bool _isTheaterMode;
+
+    private void TheaterModeButton_Click(object sender, RoutedEventArgs e) => SetTheaterMode(!_isTheaterMode);
+
+    private DateTime _settingsPopupClosedAt;
+    private bool _settingsPopupHooked;
+
+    /// <summary>⚙ 設定：ボタンの右端にそろえて設定パネルを開く（もう一度押すと閉じる）</summary>
+    private void PlayerSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        // 開いている時にこのボタンを押すと、外側クリックでいったん閉じてからこの処理が来るので、
+        // 閉じた直後なら開き直さない（＝ボタンで閉じられる）
+        if (PlayerSettingsPopup.IsOpen || (DateTime.Now - _settingsPopupClosedAt).TotalMilliseconds < 250)
+        {
+            PlayerSettingsPopup.IsOpen = false;
+            return;
+        }
+        if (!_settingsPopupHooked)
+        {
+            _settingsPopupHooked = true;
+            PlayerSettingsPopup.Closed += (_, _) => _settingsPopupClosedAt = DateTime.Now;
+            // ボタンの真下に、右端をそろえて出す（画面の拡大率に関係なく正しい位置になるよう、実際の大きさで計算）
+            PlayerSettingsPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Custom;
+            PlayerSettingsPopup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
+            [
+                new System.Windows.Controls.Primitives.CustomPopupPlacement(
+                    new Point(targetSize.Width - popupSize.Width, targetSize.Height + 6),
+                    System.Windows.Controls.Primitives.PopupPrimaryAxis.Horizontal)
+            ];
+        }
+        PlayerSettingsPopup.IsOpen = true;
+    }
+
+    private void SetTheaterMode(bool enable)
+    {
+        if (enable == _isTheaterMode) return;
+        if (_isMiniPlayerMode) SetMiniPlayerMode(false);
+        if (_isFullScreen) SetFullScreen(false);
+        _isTheaterMode = enable;
+        if (enable) SwitchToPlayerView();
+        ApplyPlayerLayout();
+
+        BtnTheaterMode.Content = "🎭 シアター"; // 幅が変わらないよう文字は同じ。ON の時は枠の色で示す
+        BtnTheaterMode.BorderBrush = enable ? new SolidColorBrush(Color.FromRgb(99, 102, 241)) : NeutralBorderBrush;
+    }
+
+    /// <summary>通常表示（全画面・ミニ窓でない時）のプレイヤー画面の各段・列の大きさを、シアターかどうかに合わせて決める</summary>
+    private void ApplyPlayerLayout()
+    {
+        if (_isFullScreen || _isMiniPlayerMode) return;
+        if (_isTheaterMode)
+        {
+            SidebarColumn.Width = new GridLength(0);
+            HeaderRow.Height = new GridLength(0);
+            SideQueueColumn.Width = new GridLength(0);
+            SideQueueBorder.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            SidebarColumn.Width = new GridLength(CurrentSidebarWidth);
+            HeaderRow.Height = new GridLength(62);
+            SideQueueColumn.Width = _isSideQueueOpen ? new GridLength(320) : new GridLength(0);
+            SideQueueBorder.Visibility = _isSideQueueOpen ? Visibility.Visible : Visibility.Collapsed;
+        }
+        PlayerControlBarRow.Height = new GridLength(50);
     }
 
     private void SetFullScreen(bool enable)
@@ -2726,8 +3572,6 @@ public partial class MainWindow : Window
             SidebarColumn.Width = new GridLength(0);
             HeaderRow.Height = new GridLength(0);
             PlayerControlBarRow.Height = new GridLength(0);
-            PlayerStudioBarRow.Height = new GridLength(0);
-            PlayerDanmakuBarRow.Height = new GridLength(0);
             SideQueueColumn.Width = new GridLength(0);
         }
         else
@@ -2735,12 +3579,7 @@ public partial class MainWindow : Window
             WindowStyle = _prevWindowStyle;
             WindowState = _prevWindowState;
 
-            SidebarColumn.Width = new GridLength(CurrentSidebarWidth);
-            HeaderRow.Height = new GridLength(62);
-            PlayerControlBarRow.Height = new GridLength(50);
-            PlayerStudioBarRow.Height = new GridLength(40);
-            PlayerDanmakuBarRow.Height = new GridLength(42);
-            SideQueueColumn.Width = _isSideQueueOpen ? new GridLength(320) : new GridLength(0);
+            ApplyPlayerLayout(); // シアターモードだった時はシアターの形に戻る
         }
     }
 }

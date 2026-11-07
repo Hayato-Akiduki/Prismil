@@ -18,6 +18,32 @@ public class LibraryData
     public List<SiteType> DisabledSites { get; set; } = [];
     /// <summary>左のメニュー（サイドバー）を隠しているか</summary>
     public bool SidebarCollapsed { get; set; }
+    /// <summary>設定画面の内容（次に起動した時も同じ設定で始まる）</summary>
+    public AppSettings? Settings { get; set; }
+}
+
+/// <summary>
+/// 設定画面で変えられる設定。選択肢は画面の一覧の何番目か（0から）で覚える。
+/// 前の版の library.json にはないので、ない時は初期値のまま
+/// </summary>
+public class AppSettings
+{
+    // 再生
+    public int SpeedIndex { get; set; } = 1;       // 0.75x / 1.0x / 1.25x / 1.5x / 2.0x
+    public bool AutoNext { get; set; } = true;
+    public bool Shuffle { get; set; }
+    public bool MusicBgListen { get; set; } = true;
+    // 映像と音
+    public int AmbientIndex { get; set; }          // 標準 / 強 / ソフト / OFF
+    public int GainIndex { get; set; }             // 100% / 150% / 200% / 300%
+    public int PresetIndex { get; set; }           // フラット / 重低音 / ボーカル / 夜間
+    public int DanmakuIndex { get; set; }          // 標準 / 大きめ / 控えめ / OFF
+    // 一覧・検索
+    public int ShortsMode { get; set; }            // 0: 除外 / 1: ショートのみ / 2: すべて
+    public int SortIndex { get; set; }
+    // 広告・ウィンドウ
+    public bool AdBlock { get; set; } = true;
+    public bool Topmost { get; set; }
 }
 
 public class LibraryService
@@ -34,6 +60,7 @@ public class LibraryService
     public List<DanmakuComment> UserDanmaku { get; } = [];
     public HashSet<SiteType> DisabledSites { get; } = [];
     public bool SidebarCollapsed { get; set; }
+    public AppSettings Settings { get; private set; } = new();
 
     public string DataFilePath => _filePath;
 
@@ -121,6 +148,7 @@ public class LibraryService
             if (data.DisabledSites != null)
                 DisabledSites.UnionWith(data.DisabledSites);
             SidebarCollapsed = data.SidebarCollapsed;
+            Settings = data.Settings ?? new AppSettings();
 
             foreach (var item in Favorites) SyncItemFlags(item);
             foreach (var item in WatchLater) SyncItemFlags(item);
@@ -145,7 +173,8 @@ public class LibraryService
                 RecentSearches = [.. RecentSearches],
                 UserDanmaku = [.. UserDanmaku],
                 DisabledSites = [.. DisabledSites],
-                SidebarCollapsed = SidebarCollapsed
+                SidebarCollapsed = SidebarCollapsed,
+                Settings = Settings
             };
             var json = JsonSerializer.Serialize(data, _jsonOptions);
             File.WriteAllText(_filePath, json);

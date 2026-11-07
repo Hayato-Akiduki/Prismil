@@ -42,8 +42,10 @@ public class VideoSearchService
     private Task<List<VideoItem>> IfEnabled(SiteType site, Func<Task<List<VideoItem>>> fetch) =>
         IsSiteEnabled(site) ? fetch() : Task.FromResult(new List<VideoItem>());
 
-    /// <summary>9ソースを並列に横断検索してバランスよく統合したリストを返す</summary>
-    public async Task<List<VideoItem>> SearchAllAsync(string query, int limitPerSite = 10)
+    /// <summary>8ソースを並列に横断検索してバランスよく統合したリストを返す</summary>
+    /// <param name="onPartial">サイトの結果が届くたびに、それまでに届いた分をまとめて渡す（途中経過の表示用）</param>
+    public async Task<List<VideoItem>> SearchAllAsync(string query, int limitPerSite = 10,
+        Action<List<VideoItem>>? onPartial = null)
     {
         var ytTask = IfEnabled(SiteType.YouTube, () => SearchYouTubeAsync(query, limitPerSite));
         var nicoTask = IfEnabled(SiteType.Niconico, () => SearchNiconicoAsync(query, limitPerSite, sortByRecentPopular: false));
@@ -51,17 +53,13 @@ public class VideoSearchService
         // 補助的なサイト（生配信・ラジオなど）は主要サイトの半分くらいに抑える
         int minor = Math.Max(6, limitPerSite / 2);
         var twitchTask = IfEnabled(SiteType.Twitch, () => SearchTwitchAsync(query, minor));
-        var abemaTask = IfEnabled(SiteType.Abema, () => SearchAbemaAsync(query, 5));
+        // ABEMA は全サイト検索には混ぜない（「サイト別に見る」で ABEMA を選んだ時だけ出す）
         var scTask = IfEnabled(SiteType.SoundCloud, () => SearchSoundCloudAsync(query, limitPerSite));
         var podcastTask = IfEnabled(SiteType.Podcast, () => SearchPodcastsAsync(query, minor));
         var radioTask = IfEnabled(SiteType.Radio, () => SearchRadioStationsAsync(query, minor));
-        var dmTask = IfEnabled(SiteType.Dailymotion, () => SearchDailymotionAsync(query, minor));
 
-        await Task.WhenAll(ytTask, nicoTask, biliTask, twitchTask, abemaTask, scTask, podcastTask, radioTask, dmTask);
-
-        return InterleaveMultiResults(
-            ytTask.Result, nicoTask.Result, scTask.Result, biliTask.Result,
-            podcastTask.Result, twitchTask.Result, radioTask.Result, dmTask.Result, abemaTask.Result);
+        return await WhenAllInterleavedAsync(onPartial,
+            ytTask, nicoTask, scTask, biliTask, podcastTask, twitchTask, radioTask);
     }
 
     // =========================================================================
@@ -83,6 +81,8 @@ public class VideoSearchService
         public bool ShortsOnly { get; }
         public int PagesLoaded { get; internal set; }
         public bool HasMore { get; internal set; } = true;
+        /// <summary>キーワードが空なら「そのサイトのおすすめ（人気・話題）」を読む</summary>
+        public bool IsFeed => string.IsNullOrWhiteSpace(Query);
         internal string? YouTubeToken { get; set; }
         /// <summary>取得済みの動画（Site:Id）。ページをまたいだ重複を除くのに使う。</summary>
         public HashSet<string> SeenKeys { get; } = [];
@@ -102,7 +102,9 @@ public class VideoSearchService
         List<VideoItem> raw;
         bool more;
 
-        switch (cursor.Site)
+        if (cursor.IsFeed)
+            (raw, more) = await FetchFeedPageAsync(cursor, page);
+        else switch (cursor.Site)
         {
             case SiteType.YouTube:
             {
@@ -146,13 +148,6 @@ public class VideoSearchService
                 more = raw.Count >= size / 2;
                 break;
             }
-            case SiteType.Dailymotion:
-            {
-                const int size = 50;
-                raw = await SearchDailymotionAsync(q, size, page + 1);
-                more = raw.Count >= size;
-                break;
-            }
             case SiteType.Radio:
             {
                 const int size = 50;
@@ -194,6 +189,77 @@ public class VideoSearchService
         return fresh;
     }
 
+    // おすすめ（キーワードなし）で使う、ジャンルの違う検索ワード。ページごとに次のワードへ進む。
+    private static readonly string[] YouTubeFeedQueries =
+        ["話題 人気 MV 公式", "急上昇 人気 動画", "ゲーム実況 人気", "アニメ 公式 PV", "人気 歌ってみた", "料理 人気 レシピ", "Vlog 人気", "ニュース 解説"];
+    private static readonly string[] SoundCloudFeedQueries =
+        ["J-POP", "Vocaloid", "Anime", "Lofi", "City Pop", "EDM"];
+    private static readonly string[] PodcastFeedQueries =
+        ["ニュース", "お笑い", "ビジネス", "音楽", "雑談", "テクノロジー", "歴史"];
+
+    /// <summary>サイトのおすすめ（人気・話題の動画）を1ページ分取る</summary>
+    private async Task<(List<VideoItem> Raw, bool More)> FetchFeedPageAsync(SiteSearchCursor cursor, int page)
+    {
+        switch (cursor.Site)
+        {
+            case SiteType.YouTube:
+            {
+                // ジャンルごとのワードで検索し、1ワードにつき続きのページも1回読む
+                if (page >= YouTubeFeedQueries.Length) return ([], false);
+                string q = YouTubeFeedQueries[page] + (cursor.ShortsOnly ? " #shorts" : "");
+                var raw = new List<VideoItem>();
+                string? token = null;
+                for (int i = 0; i < 2; i++)
+                {
+                    var (items, next) = await SearchYouTubePageAsync(q, token);
+                    raw.AddRange(items);
+                    if (string.IsNullOrEmpty(next)) break;
+                    token = next;
+                }
+                return (raw, page + 1 < YouTubeFeedQueries.Length);
+            }
+            case SiteType.Niconico:
+            {
+                // 最近半年の再生数が多い順
+                const int size = 50;
+                var raw = await SearchNiconicoAsync("音楽 OR ゲーム OR アニメ OR ボカロ OR 実況 OR 料理", size,
+                    sortByRecentPopular: true, offset: page * size);
+                return (raw, raw.Count >= size && (page + 1) * size < 1000);
+            }
+            case SiteType.Bilibili:
+            {
+                const int size = 40;
+                var raw = await GetBilibiliPopularAsync(size, page + 1);
+                return (raw, raw.Count > 0 && page + 1 < 10);
+            }
+            case SiteType.SoundCloud:
+            {
+                if (page >= SoundCloudFeedQueries.Length) return ([], false);
+                var raw = await SearchSoundCloudAsync(SoundCloudFeedQueries[page], 40);
+                return (raw, page + 1 < SoundCloudFeedQueries.Length);
+            }
+            case SiteType.Radio:
+            {
+                const int size = 50;
+                // 日本の局を人気順に
+                var raw = await SearchRadioStationsAsync("", size, japanOnly: true, offset: page * size);
+                return (raw, raw.Count >= size);
+            }
+            case SiteType.Podcast:
+            {
+                if (page >= PodcastFeedQueries.Length) return ([], false);
+                var raw = await SearchPodcastsAsync(PodcastFeedQueries[page], 30);
+                return (raw, page + 1 < PodcastFeedQueries.Length);
+            }
+            case SiteType.Twitch:
+                return (await GetTwitchPopularStreamsAsync(40), false);
+            case SiteType.Abema:
+                return (await GetAbemaLiveChannelsAsync(30), false);
+            default:
+                return ([], false);
+        }
+    }
+
     /// <summary>
     /// 全サイト検索の「もっと読み込む」。ページ送りできる主要サイトから次の分を集め、交互に並べて返す。
     /// cursors が空なら、すでに表示中の動画（existing）を取得済みとして登録した目印を作る。
@@ -205,7 +271,7 @@ public class VideoSearchService
         {
             var known = existing.Select(x => x.UniqueKey).ToList();
             foreach (var site in new[] { SiteType.YouTube, SiteType.Niconico, SiteType.SoundCloud,
-                                         SiteType.Bilibili, SiteType.Dailymotion })
+                                         SiteType.Bilibili })
             {
                 if (!IsSiteEnabled(site)) continue;
                 var c = new SiteSearchCursor(site, query, shortsOnly);
@@ -245,9 +311,7 @@ public class VideoSearchService
         var podcastTask = IfEnabled(SiteType.Podcast, () => SearchPodcastsAsync(q, 8));
         var radioTask = IfEnabled(SiteType.Radio, () => SearchRadioStationsAsync(q, 6));
         var biliTask = IfEnabled(SiteType.Bilibili, () => SearchBilibiliAsync(q + " 音楽 MV", 8));
-        var dmTask = IfEnabled(SiteType.Dailymotion, () => SearchDailymotionAsync(q + " music", 6));
-
-        await Task.WhenAll(scTask, ytTask, nicoTask, podcastTask, radioTask, biliTask, dmTask);
+        await Task.WhenAll(scTask, ytTask, nicoTask, podcastTask, radioTask, biliTask);
 
         // ショート動画（62秒以下）や短すぎる効果音を除外して、楽曲・MV・ラジオ・Podcastだけを厳選
         static List<VideoItem> FilterMusicTracks(List<VideoItem> src) =>
@@ -259,8 +323,7 @@ public class VideoSearchService
             FilterMusicTracks(nicoTask.Result),
             podcastTask.Result,
             radioTask.Result,
-            FilterMusicTracks(biliTask.Result),
-            FilterMusicTracks(dmTask.Result));
+            FilterMusicTracks(biliTask.Result));
     }
 
     public async Task<List<VideoItem>> SearchNiconicoMusicAsync(string query, int limit = 14)
@@ -413,7 +476,6 @@ public class VideoSearchService
             SiteType.Twitch => await SearchTwitchAsync(channel.Name, limit),
             SiteType.Abema => await SearchAbemaAsync(channel.Name, limit),
             SiteType.SoundCloud => await SearchSoundCloudAsync(channel.Name, limit),
-            SiteType.Dailymotion => await SearchDailymotionAsync(channel.Name, limit),
             SiteType.Podcast => await SearchPodcastsAsync(channel.Name, limit),
             SiteType.Radio => await SearchRadioStationsAsync(channel.Name, limit),
             _ => []
@@ -451,8 +513,9 @@ public class VideoSearchService
         return merged;
     }
 
-    /// <summary>ホーム画面用：7サイトのトレンド・人気動画・生放送・音楽を並列取得</summary>
-    public async Task<List<VideoItem>> GetDiscoverFeedAsync(string? topicKeyword = null, int limitPerSite = 9)
+    /// <summary>ホーム画面用：5サイト（ABEMA以外）のトレンド・人気動画・生放送・音楽を並列取得</summary>
+    public async Task<List<VideoItem>> GetDiscoverFeedAsync(string? topicKeyword = null, int limitPerSite = 9,
+        Action<List<VideoItem>>? onPartial = null)
     {
         if (string.IsNullOrWhiteSpace(topicKeyword))
         {
@@ -460,18 +523,46 @@ public class VideoSearchService
             var nicoTask = IfEnabled(SiteType.Niconico, () => SearchNiconicoAsync("音楽 OR ゲーム OR アニメ OR ボカロ", limitPerSite, sortByRecentPopular: true));
             var biliTask = IfEnabled(SiteType.Bilibili, () => GetBilibiliPopularAsync(limitPerSite));
             var twitchTask = IfEnabled(SiteType.Twitch, () => GetTwitchPopularStreamsAsync(limitPerSite));
-            var abemaTask = IfEnabled(SiteType.Abema, () => GetAbemaLiveChannelsAsync(6));
+            // ABEMA は全サイトのおすすめには混ぜない（「サイト別に見る」で ABEMA を選んだ時だけ出す）
             var scTask = IfEnabled(SiteType.SoundCloud, () => SearchSoundCloudAsync("J-POP Vocaloid Anime Lofi", 8));
-            var dmTask = IfEnabled(SiteType.Dailymotion, () => SearchDailymotionAsync("music anime japan", 6));
 
-            await Task.WhenAll(ytTask, nicoTask, biliTask, twitchTask, abemaTask, scTask, dmTask);
-            return InterleaveMultiResults(
-                ytTask.Result, nicoTask.Result, scTask.Result, biliTask.Result, twitchTask.Result, abemaTask.Result, dmTask.Result);
+            return await WhenAllInterleavedAsync(onPartial,
+                ytTask, nicoTask, scTask, biliTask, twitchTask);
         }
         else
         {
-            return await SearchAllAsync(topicKeyword, limitPerSite);
+            return await SearchAllAsync(topicKeyword, limitPerSite, onPartial);
         }
+    }
+
+    /// <summary>
+    /// 全サイトの取得を待ち、サイトが交互になるように並べて返す。
+    /// onPartial があれば、サイトの結果が届くたびに、それまでに届いた分を同じ並べ方で渡す。
+    /// </summary>
+    private static async Task<List<VideoItem>> WhenAllInterleavedAsync(
+        Action<List<VideoItem>>? onPartial, params Task<List<VideoItem>>[] tasks)
+    {
+        if (onPartial != null)
+        {
+            var pending = new HashSet<Task<List<VideoItem>>>(tasks);
+            int lastCount = 0;
+            while (pending.Count > 1)
+            {
+                var done = await Task.WhenAny(pending);
+                pending.Remove(done);
+                var partial = InterleaveMultiResults(
+                    tasks.Select(t => t.IsCompletedSuccessfully ? t.Result : []).ToArray());
+                // 新しく増えたときだけ知らせる（OFFのサイトや0件のサイトでは画面を作り直さない）
+                if (partial.Count > lastCount)
+                {
+                    lastCount = partial.Count;
+                    onPartial(partial);
+                }
+            }
+        }
+
+        await Task.WhenAll(tasks);
+        return InterleaveMultiResults(tasks.Select(t => t.Result).ToArray());
     }
 
     private static List<VideoItem> InterleaveMultiResults(params List<VideoItem>[] lists)
@@ -651,106 +742,6 @@ public class VideoSearchService
         }
     }
 
-    /// <summary>YouTube動画の実際のコメント一覧をInnerTube APIで取得し、弾幕用データ（タイムスタンプ判定付き）に変換する</summary>
-    public async Task<List<DanmakuComment>> GetYouTubeDanmakuCommentsAsync(string videoId, int maxComments = 80)
-    {
-        var result = new List<DanmakuComment>();
-        if (string.IsNullOrWhiteSpace(videoId) || videoId.StartsWith("http")) return result;
-
-        try
-        {
-            var clientCtx = new
-            {
-                client = new
-                {
-                    clientName = "WEB",
-                    clientVersion = "2.20240725.01.00",
-                    hl = "ja",
-                    gl = "JP"
-                }
-            };
-
-            // 1. /youtubei/v1/next からコメントセクションの continuation token を取得
-            var initPayload = new { context = clientCtx, videoId };
-            using var req1 = new HttpRequestMessage(HttpMethod.Post, "https://www.youtube.com/youtubei/v1/next?prettyPrint=false")
-            {
-                Content = new StringContent(JsonSerializer.Serialize(initPayload), Encoding.UTF8, "application/json")
-            };
-            using var res1 = await _http.SendAsync(req1);
-            if (!res1.IsSuccessStatusCode) return result;
-
-            var json1 = await res1.Content.ReadAsStringAsync();
-            var tokenMatches = Regex.Matches(json1, @"""token"":""([^""]{40,})""");
-
-            // 後ろの方のトークンほどエンゲージメントパネル（コメント欄）である確率が高いので逆順も含め探索
-            var candidateTokens = tokenMatches.Select(m => m.Groups[1].Value).Distinct().Reverse().Take(5).ToList();
-
-            foreach (var token in candidateTokens)
-            {
-                var contPayload = new { context = clientCtx, continuation = token };
-                using var req2 = new HttpRequestMessage(HttpMethod.Post, "https://www.youtube.com/youtubei/v1/next?prettyPrint=false")
-                {
-                    Content = new StringContent(JsonSerializer.Serialize(contPayload), Encoding.UTF8, "application/json")
-                };
-                using var res2 = await _http.SendAsync(req2);
-                if (!res2.IsSuccessStatusCode) continue;
-
-                using var stream2 = await res2.Content.ReadAsStreamAsync();
-                using var doc2 = await JsonDocument.ParseAsync(stream2);
-
-                var payloads = new List<JsonElement>();
-                FindElementsByPropertyName(doc2.RootElement, "commentEntityPayload", payloads);
-
-                if (payloads.Count == 0) continue;
-
-                foreach (var cp in payloads)
-                {
-                    if (result.Count >= maxComments) break;
-                    if (!cp.TryGetProperty("properties", out var propEl) ||
-                        !propEl.TryGetProperty("content", out var contEl) ||
-                        !contEl.TryGetProperty("content", out var textEl))
-                        continue;
-
-                    string raw = textEl.GetString() ?? "";
-                    if (string.IsNullOrWhiteSpace(raw)) continue;
-
-                    double timeSec = -1;
-                    var tsMatch = Regex.Match(raw, @"\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b");
-                    if (tsMatch.Success)
-                    {
-                        int h = string.IsNullOrEmpty(tsMatch.Groups[1].Value) ? 0 : int.Parse(tsMatch.Groups[1].Value);
-                        int m = int.Parse(tsMatch.Groups[2].Value);
-                        int s = int.Parse(tsMatch.Groups[3].Value);
-                        timeSec = h * 3600 + m * 60 + s;
-                        raw = raw.Replace(tsMatch.Value, "").Trim();
-                    }
-
-                    // 改行を整理して弾幕として読みやすい長さに整形
-                    var lines = raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    string cleanLine = lines.FirstOrDefault(l => l.Length >= 2) ?? raw.Trim();
-                    if (cleanLine.Length > 64)
-                        cleanLine = cleanLine[..64] + "…";
-
-                    if (!string.IsNullOrWhiteSpace(cleanLine))
-                    {
-                        result.Add(new DanmakuComment
-                        {
-                            VideoKey = $"YouTube:{videoId}",
-                            TimeSeconds = timeSec,
-                            Text = cleanLine,
-                            Color = "#FFFFFF"
-                        });
-                    }
-                }
-
-                if (result.Count > 0) break;
-            }
-        }
-        catch { }
-
-        return result;
-    }
-
     // =========================================================================
     // ニコニコ動画 (Snapshot Search API v2)
     // =========================================================================
@@ -895,12 +886,12 @@ public class VideoSearchService
         return list;
     }
 
-    public async Task<List<VideoItem>> GetBilibiliPopularAsync(int limit = 12)
+    public async Task<List<VideoItem>> GetBilibiliPopularAsync(int limit = 12, int page = 1)
     {
         var list = new List<VideoItem>();
         try
         {
-            var url = $"https://api.bilibili.com/x/web-interface/popular?ps={limit}&pn=1";
+            var url = $"https://api.bilibili.com/x/web-interface/popular?ps={Math.Clamp(limit, 1, 50)}&pn={Math.Max(1, page)}";
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Add("Cookie", "buvid3=12345678-1234-1234-1234-123456789012infoc");
             req.Headers.Add("Referer", "https://www.bilibili.com/");
@@ -1377,60 +1368,6 @@ public class VideoSearchService
             }
         }
         catch { }
-    }
-
-    // =========================================================================
-    // Dailymotion (公式 REST JSON API + クリーン埋め込みプレイヤー)
-    // =========================================================================
-    public async Task<List<VideoItem>> SearchDailymotionAsync(string query, int limit = 10, int page = 1)
-    {
-        var list = new List<VideoItem>();
-        try
-        {
-            string url = $"https://api.dailymotion.com/videos?search={Uri.EscapeDataString(query)}&fields=id,title,duration,views_total,thumbnail_480_url,owner.screenname,created_time&limit={Math.Clamp(limit, 1, 100)}&page={Math.Max(1, page)}";
-            using var res = await _http.GetAsync(url);
-            if (!res.IsSuccessStatusCode) return list;
-
-            using var stream = await res.Content.ReadAsStreamAsync();
-            using var doc = await JsonDocument.ParseAsync(stream);
-
-            if (!doc.RootElement.TryGetProperty("list", out var listArr) || listArr.ValueKind != JsonValueKind.Array)
-                return list;
-
-            foreach (var item in listArr.EnumerateArray())
-            {
-                if (list.Count >= limit) break;
-                string id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? "" : "";
-                if (string.IsNullOrEmpty(id)) continue;
-
-                string title = item.TryGetProperty("title", out var tEl) ? WebUtility.HtmlDecode(tEl.GetString() ?? "") : "";
-                int durationSec = item.TryGetProperty("duration", out var dEl) && dEl.TryGetInt32(out var ds) ? ds : 0;
-                long views = item.TryGetProperty("views_total", out var vEl) && vEl.TryGetInt64(out var vt) ? vt : 0;
-                string thumb = item.TryGetProperty("thumbnail_480_url", out var thEl) ? thEl.GetString() ?? "" : "";
-                string author = item.TryGetProperty("owner.screenname", out var owEl) ? owEl.GetString() ?? "Dailymotion" : "Dailymotion";
-
-                string published = "";
-                if (item.TryGetProperty("created_time", out var ctEl) && ctEl.TryGetInt64(out var unixSec) && unixSec > 0)
-                    published = DateTimeOffset.FromUnixTimeSeconds(unixSec).ToLocalTime().ToString("yyyy/MM/dd");
-
-                list.Add(new VideoItem
-                {
-                    Id = id,
-                    Site = SiteType.Dailymotion,
-                    Title = title,
-                    Author = author,
-                    ThumbnailUrl = NormalizeUrl(thumb),
-                    WatchUrl = $"https://www.dailymotion.com/embed/video/{id}?autoplay=1",
-                    DurationSeconds = durationSec,
-                    DurationText = VideoItem.FormatDuration(durationSec),
-                    ViewCount = views,
-                    ViewCountText = VideoItem.FormatViewCount(views),
-                    PublishedText = published
-                });
-            }
-        }
-        catch { }
-        return list;
     }
 
     // =========================================================================
