@@ -56,6 +56,12 @@ public partial class MainWindow : Window
     private string _lastTopicKeyword = "";
     private string _lastMusicStation = "";
     private string _lastSearchQuery = "";
+    private string? _gachaTheme;
+    private bool HasSearchResultsToReload => _gachaTheme != null || _lastSearchQuery.Length > 0;
+
+    private Task ReloadSearchResultsAsync() => _gachaTheme is string theme
+        ? DrawGachaAsync(theme)
+        : ExecuteSearchAsync(_lastSearchQuery, rememberQuery: false);
 
     // 検索の状態
     /// <summary>検索ボックスで検索したキーワード（ガチャ結果などのときは空）</summary>
@@ -360,8 +366,8 @@ public partial class MainWindow : Window
             await LoadMusicFeedAsync(_lastMusicStation);
         else if (NavSubscriptionsFeed.IsChecked == true)
             await LoadSubscriptionsFeedAsync();
-        else if (NavSearch.IsChecked == true && !string.IsNullOrEmpty(_lastSearchQuery))
-            await ExecuteSearchAsync(_lastSearchQuery);
+        else if (NavSearch.IsChecked == true && HasSearchResultsToReload)
+            await ReloadSearchResultsAsync();
         else if (NavHome.IsChecked == true)
             await LoadDiscoverFeedAsync(_lastTopicKeyword);
     }
@@ -772,6 +778,7 @@ public partial class MainWindow : Window
         // 左の「サイト別に見る」（または検索ボックス横の選択）で1サイトを選んでいれば、そのサイトだけを検索する
         var site = SelectedSiteFilter();
         int generation = ++_searchGeneration;
+        _gachaTheme = null;
         _searchKeyword = query;
         _searchSite = site;
         _siteSearchCursor = null;
@@ -1053,7 +1060,8 @@ public partial class MainWindow : Window
         else if (NavSearch.IsChecked == true)
         {
             source = _searchItems;
-            headerTitle = string.IsNullOrEmpty(_lastSearchQuery)
+            headerTitle = _gachaTheme != null ? $"🎰 ガチャ結果「{_gachaTheme}」"
+                : string.IsNullOrEmpty(_lastSearchQuery)
                 ? "🔍 横断検索結果"
                 : _searchSite is SiteType ss && _lastSearchQuery == _searchKeyword
                     ? $"🔍 「{_lastSearchQuery}」の{SiteLabel(ss)}検索結果"
@@ -1179,7 +1187,7 @@ public partial class MainWindow : Window
                     ShowEmptyState("「後で見る」リストは空です", "気になる動画の「+ 後で見る」ボタンを押してストックしましょう");
                 else if (NavHistory.IsChecked == true)
                     ShowEmptyState("視聴履歴はまだありません", "動画を再生すると自動的に履歴が記録されます");
-                else if (NavSearch.IsChecked == true && string.IsNullOrEmpty(_lastSearchQuery))
+                else if (NavSearch.IsChecked == true && !HasSearchResultsToReload)
                     ShowEmptyState("キーワードを入力して横断検索", "上の検索バーから YouTube・ニコニコ動画・bilibili をまとめて検索できます");
                 else
                     ShowEmptyState("該当する動画が見つかりませんでした", "別のキーワードを試すか、左の「サイト別に見る」で別のサイトを選んでください");
@@ -1267,7 +1275,7 @@ public partial class MainWindow : Window
             "WatchLater" => _libraryService.WatchLater,
             "Favorites" => _libraryService.Favorites,
             // 次に再生：検索・一覧の続き ＋ 視聴履歴をもとにしたおすすめ（まだ作れていない間は今の一覧）
-            _ => _upNext.Count > 0 && _upNextKey == _currentPlayingItem?.UniqueKey
+            _ => _upNextKey != null && _upNextKey == _currentPlayingItem?.UniqueKey
                 ? _upNext
                 : (_displayedCards.Count > 0 ? _displayedCards : _discoverItems)
         };
@@ -1406,7 +1414,8 @@ public partial class MainWindow : Window
         var item = _currentPlayingItem;
         if (item == null || item.Site != SiteType.Niconico) return;
 
-        bool hasNext = SideQueueItemsControl.ItemsSource is IList<VideoItem> list && list.Count > 1;
+        bool hasNext = SideQueueItemsControl.ItemsSource is IList<VideoItem> list &&
+                       list.Any(candidate => candidate.UniqueKey != item.UniqueKey);
         if (!hasNext || _loginSkipStreak >= 5)
         {
             ShowNotice("この動画はログインが必要なため再生できません");
@@ -2626,9 +2635,9 @@ public partial class MainWindow : Window
         {
             await LoadSubscriptionsFeedAsync();
         }
-        else if (NavSearch.IsChecked == true && !string.IsNullOrEmpty(_lastSearchQuery))
+        else if (NavSearch.IsChecked == true && HasSearchResultsToReload)
         {
-            await ExecuteSearchAsync(_lastSearchQuery);
+            await ReloadSearchResultsAsync();
         }
         else
         {
@@ -2997,8 +3006,8 @@ public partial class MainWindow : Window
 
         if (_shortsFilterMode == 1)
         {
-            if (NavSearch.IsChecked == true && !string.IsNullOrEmpty(_lastSearchQuery))
-                await ExecuteSearchAsync(_lastSearchQuery);
+            if (NavSearch.IsChecked == true && HasSearchResultsToReload)
+                await ReloadSearchResultsAsync();
             else if (NavHome.IsChecked == true)
                 await LoadDiscoverFeedAsync(_lastTopicKeyword);
             else
@@ -3043,7 +3052,13 @@ public partial class MainWindow : Window
         foreach (var kw in _libraryService.RecentSearches)
             pool.Add(kw);
 
-        string pickedTheme = pool[Random.Shared.Next(pool.Count)];
+        await DrawGachaAsync(pool[Random.Shared.Next(pool.Count)]);
+    }
+
+    private async Task DrawGachaAsync(string pickedTheme)
+    {
+        _gachaTheme = pickedTheme;
+        _lastSearchQuery = "";
 
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
@@ -3076,14 +3091,12 @@ public partial class MainWindow : Window
             .Take(12)
             .ToList();
 
-        _lastSearchQuery = $"🎰 ガチャ結果: {pickedTheme}";
         _searchItems = gachaResult;
         NavSearch.Tag = gachaResult.Count.ToString();
 
         if (NavSearch.IsChecked != true) return;
         HideLoadingOverlay();
         RefreshDisplayedCards();
-        ViewHeaderTitle.Text = $"🎰 ガチャ10連発掘！ テーマ:「{pickedTheme}」";
     }
 
     private void PlayRandomOne_Click(object sender, RoutedEventArgs e)
