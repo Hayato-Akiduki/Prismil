@@ -697,7 +697,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _isHomeLoading = false;
+            if (generation == _homeGeneration) _isHomeLoading = false;
         }
 
         // 待っている間に別の読み込みが始まっていたら、この結果は使わない
@@ -813,7 +813,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _isSearching = false;
+            if (generation == _searchGeneration) _isSearching = false;
         }
 
         // 待っている間に別の検索が始まっていたら、この結果は使わない
@@ -991,7 +991,7 @@ public partial class MainWindow : Window
     /// <summary>ホーム画面で「サイト別に見る」を切り替えたら、そのサイト（または全サイト）のおすすめを読み込み直す</summary>
     private async Task<bool> ReloadHomeIfSiteChangedAsync()
     {
-        if (_suppressHomeAutoReload || _isHomeLoading || NavHome.IsChecked != true) return false;
+        if (_suppressHomeAutoReload || NavHome.IsChecked != true) return false;
         if (_activeCustomPlaylist != null || _activeSubscribedChannel != null) return false;
         if (SelectedSiteFilter() == _homeSite) return false;
         await LoadDiscoverFeedAsync(_lastTopicKeyword);
@@ -1000,7 +1000,7 @@ public partial class MainWindow : Window
 
     private async Task<bool> ResearchIfSiteChangedAsync()
     {
-        if (_isSearching || NavSearch.IsChecked != true) return false;
+        if (NavSearch.IsChecked != true) return false;
         if (string.IsNullOrEmpty(_searchKeyword) || _lastSearchQuery != _searchKeyword) return false;
         if (SelectedSiteFilter() == _searchSite) return false;
         await ExecuteSearchAsync(_searchKeyword, rememberQuery: false);
@@ -3048,12 +3048,13 @@ public partial class MainWindow : Window
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
         // ガチャはキーワード検索ではないので、続きの読み込みやサイト別の再検索はしない
-        ++_searchGeneration;
+        int generation = ++_searchGeneration;
+        _isSearching = false;
         _searchKeyword = "";
         _searchSite = null;
         _siteSearchCursor = null;
         _allSearchCursors.Clear();
-        FilterAll.IsChecked = true;
+        LeaveSiteMode();
         NavSearch.IsChecked = true;
         SwitchToCardBrowserView();
 
@@ -3064,6 +3065,8 @@ public partial class MainWindow : Window
         var allCandidates = _shortsFilterMode == 1
             ? await _searchService.SearchAllShortsAsync(pickedTheme, limitPerSite: 12)
             : await _searchService.SearchAllAsync(pickedTheme, limitPerSite: 10);
+
+        if (generation != _searchGeneration) return;
 
         _libraryService.SyncCollectionFlags(allCandidates);
 
@@ -3077,6 +3080,7 @@ public partial class MainWindow : Window
         _searchItems = gachaResult;
         NavSearch.Tag = gachaResult.Count.ToString();
 
+        if (NavSearch.IsChecked != true) return;
         HideLoadingOverlay();
         RefreshDisplayedCards();
         ViewHeaderTitle.Text = $"🎰 ガチャ10連発掘！ テーマ:「{pickedTheme}」";
@@ -3415,11 +3419,11 @@ public partial class MainWindow : Window
                     FilterAll.IsChecked = true;
                     e.Handled = true;
                     break;
-                case Key.D2:
+                case Key.D2 when _searchService.IsSiteEnabled(SiteType.YouTube):
                     FilterYouTube.IsChecked = true;
                     e.Handled = true;
                     break;
-                case Key.D3:
+                case Key.D3 when _searchService.IsSiteEnabled(SiteType.Niconico):
                     FilterNiconico.IsChecked = true;
                     e.Handled = true;
                     break;
@@ -3427,11 +3431,11 @@ public partial class MainWindow : Window
                     FilterBilibili.IsChecked = true;
                     e.Handled = true;
                     break;
-                case Key.D5:
+                case Key.D5 when _searchService.IsSiteEnabled(SiteType.Twitch):
                     FilterTwitch.IsChecked = true;
                     e.Handled = true;
                     break;
-                case Key.D6:
+                case Key.D6 when _searchService.IsSiteEnabled(SiteType.Abema):
                     FilterAbema.IsChecked = true;
                     e.Handled = true;
                     break;
