@@ -315,6 +315,14 @@ public partial class MainWindow : Window
             radio.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
             if (!on && radio.IsChecked == true) FilterAll.IsChecked = true;
         }
+        foreach (var button in BroadcastStations.Children.OfType<Button>())
+        {
+            var site = ((string)button.Tag).StartsWith("radio:") ? SiteType.Radio : SiteType.Podcast;
+            button.Visibility = _searchService.IsSiteEnabled(site) ? Visibility.Visible : Visibility.Collapsed;
+        }
+        BroadcastStations.Visibility = BroadcastStations.Children.OfType<Button>().Any(b => b.Visibility == Visibility.Visible)
+            ? Visibility.Visible : Visibility.Collapsed;
+        SoundCloudStation.Visibility = _searchService.IsSiteEnabled(SiteType.SoundCloud) ? Visibility.Visible : Visibility.Collapsed;
         RebuildSearchSiteCombo();
     }
 
@@ -736,11 +744,21 @@ public partial class MainWindow : Window
     private async Task LoadMusicFeedAsync(string? stationKeyword = null)
     {
         _lastMusicStation = stationKeyword ?? "";
+        if ((_lastMusicStation.StartsWith("radio:", StringComparison.OrdinalIgnoreCase) && !_searchService.IsSiteEnabled(SiteType.Radio)) ||
+            (_lastMusicStation.StartsWith("podcast:", StringComparison.OrdinalIgnoreCase) && !_searchService.IsSiteEnabled(SiteType.Podcast)))
+            _lastMusicStation = "";
         ShowLoadingOverlay(
             FormatMusicStationTitle(_lastMusicStation) + " を取得中...",
             "SoundCloud・Podcast・ネットラジオ・YouTube・ニコニコ音楽から厳選しています");
 
-        var items = await _searchService.SearchMusicFeedAsync(_lastMusicStation, limitPerSite: 12);
+        void OnPartial(List<VideoItem> partialItems)
+        {
+            if (generation != _musicGeneration || NavMusicMode.IsChecked != true) return;
+            _libraryService.SyncCollectionFlags(partialItems);
+            _musicItems = partialItems;
+            RefreshDisplayedCards(partial: true);
+        }
+        var items = await _searchService.SearchMusicFeedAsync(_lastMusicStation, limitPerSite: 12, onPartial: OnPartial);
         _libraryService.SyncCollectionFlags(items);
         _musicItems = items;
         NavMusicMode.Tag = items.Count > 0 ? items.Count.ToString() : null;
@@ -839,7 +857,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(_searchKeyword) || _lastSearchQuery != _searchKeyword) return false;
         if (_siteSearchCursor != null) return _siteSearchCursor.HasMore;
-        return _allSearchCursors.Count == 0 || _allSearchCursors.Any(c => c.HasMore);
+        return _allSearchCursors.Count == 0 ? _searchService.HasPagedSite : _allSearchCursors.Any(c => c.HasMore);
     }
 
     /// <summary>検索結果の続き（次のページ）を読み込んで、一覧の後ろに足す</summary>
@@ -939,13 +957,18 @@ public partial class MainWindow : Window
         PagerPanel.Children.Clear();
         int pageCount = CardPageCount;
         bool canMore = CanLoadMoreCurrent();
-        if (_displayedCards.Count == 0 || (pageCount <= 1 && !canMore))
+        if (pageCount <= 1 && !canMore)
         {
             PagerBar.Visibility = Visibility.Collapsed;
             return;
         }
         PagerBar.Visibility = Visibility.Visible;
 
+        if (_displayedCards.Count == 0)
+        {
+            AddPagerButton(_isLoadingMore ? "読み込み中…" : "続きを読み込む", 0, !_isLoadingMore);
+            return;
+        }
         AddPagerButton("‹ 前へ", _cardPage - 1, _cardPage > 0 && !_isLoadingMore);
 
         // 最初・最後のページと、今のページの前後2ページを出す（間は「…」）
@@ -1177,7 +1200,12 @@ public partial class MainWindow : Window
         {
             if (finalList.Count == 0)
             {
-                if (NavSubscriptionsFeed.IsChecked == true && _libraryService.Subscriptions.Count == 0)
+                if (canMore)
+                {
+                    ShowEmptyState("この範囲には表示できる動画がありません", "下の「続きを読み込む」で次の候補を探せます");
+                    StatusOverlay.IsHitTestVisible = false;
+                }
+                else if (NavSubscriptionsFeed.IsChecked == true && _libraryService.Subscriptions.Count == 0)
                     ShowEmptyState("登録チャンネルがまだありません", "動画カードの投稿者名横にある「☆ 登録」ボタンを押すと、ログイン不要でこのPC内にチャンネル登録できます");
                 else if (isCustomPlaylist)
                     ShowEmptyState("このプレイリストはまだ空です", "動画カードの「📁+」ボタンから好きな動画を自由に追加できます");
@@ -3389,6 +3417,7 @@ public partial class MainWindow : Window
     // =========================================================================
     private void ShowLoadingOverlay(string title, string subtitle)
     {
+        StatusOverlay.IsHitTestVisible = true;
         _isLoading = true;
         StatusTitle.Text = title;
         StatusSubtitle.Text = subtitle;
@@ -3397,6 +3426,7 @@ public partial class MainWindow : Window
 
     private void ShowEmptyState(string title, string subtitle)
     {
+        StatusOverlay.IsHitTestVisible = true;
         StatusTitle.Text = title;
         StatusSubtitle.Text = subtitle;
         StatusOverlay.Visibility = Visibility.Visible;

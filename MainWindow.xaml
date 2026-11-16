@@ -631,7 +631,7 @@
                                         <TextBlock Text="🎵 音楽:" Foreground="#F472B6" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <Button Content="🔥 J-POP / 邦楽ヒット" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="YOASOBI 米津玄師 Ado Official MV J-POP"/>
                                         <Button Content="🎤 ボカロ / 歌ってみた" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="VOCALOID 初音ミク ボカロ 歌ってみた 名曲"/>
-                                        <Button Content="☁ SoundCloud トレンド" Style="{StaticResource TopicChipButton}" Click="MusicStationSoundCloud_Click" Tag="J-POP Anime Vocaloid Future Bass Remix"/>
+                                        <Button Content="☁ SoundCloud トレンド" Style="{StaticResource TopicChipButton}" x:Name="SoundCloudStation" Click="MusicStationSoundCloud_Click" Tag="J-POP Anime Vocaloid Future Bass Remix"/>
                                         <Button Content="🎹 作業用 Lo-Fi / Chill" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="Lofi Hip Hop Chill Beats 作業用BGM 勉強用"/>
                                         <Button Content="🎸 アニソン / ゲーム神曲" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="アニソン 神曲 ゲーム音楽 OST 主題歌"/>
                                         <Button Content="🎧 EDM / Nightcore / Remix" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="EDM Nightcore Kawaii Future Bass Remix"/>
@@ -642,7 +642,7 @@
 
                                 <!-- 2段目：📻 ネットラジオ生放送 ＆ 🎙 ポッドキャスト番組 -->
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel x:Name="BroadcastStations" Orientation="Horizontal">
                                         <TextBlock Text="📻 ラジオ &amp; Podcast:" Foreground="#38BDF8" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <Button Content="🎙 人気ラジオ番組・芸人トーク" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="podcast:ラジオショー オールナイトニッポン 芸人 ラジオ"/>

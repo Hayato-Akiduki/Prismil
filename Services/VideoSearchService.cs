@@ -36,6 +36,9 @@ public class VideoSearchService
     /// <summary>読み込まないサイトを設定する</summary>
     public void SetDisabledSites(IEnumerable<SiteType> sites) => _disabledSites = [.. sites];
 
+    private static readonly SiteType[] PagedSites = [SiteType.YouTube, SiteType.Niconico, SiteType.SoundCloud, SiteType.Bilibili];
+    public bool HasPagedSite => PagedSites.Any(IsSiteEnabled);
+
     public bool IsSiteEnabled(SiteType site) => !_disabledSites.Contains(site);
 
     /// <summary>サイトがONなら取得、OFFなら通信せずに空のリストを返す</summary>
@@ -270,8 +273,7 @@ public class VideoSearchService
         if (cursors.Count == 0)
         {
             var known = existing.Select(x => x.UniqueKey).ToList();
-            foreach (var site in new[] { SiteType.YouTube, SiteType.Niconico, SiteType.SoundCloud,
-                                         SiteType.Bilibili })
+            foreach (var site in PagedSites)
             {
                 if (!IsSiteEnabled(site)) continue;
                 var c = new SiteSearchCursor(site, query, shortsOnly);
@@ -286,7 +288,8 @@ public class VideoSearchService
     }
 
     /// <summary>🎵 音楽＆ラジオ・Podcast専用モード (Music Mode)：楽曲・MV・ラジオ生放送・Podcastを特化取得</summary>
-    public async Task<List<VideoItem>> SearchMusicFeedAsync(string? queryOrStation = null, int limitPerSite = 12)
+    public async Task<List<VideoItem>> SearchMusicFeedAsync(string? queryOrStation = null, int limitPerSite = 12,
+        Action<List<VideoItem>>? onPartial = null)
     {
         string q = string.IsNullOrWhiteSpace(queryOrStation)
             ? "YOASOBI 米津玄師 Ado Official Music Video ボカロ"
@@ -297,12 +300,12 @@ public class VideoSearchService
         {
             string radioTag = q["radio:".Length..].Trim();
             bool jpOnly = radioTag.Equals("JP", StringComparison.OrdinalIgnoreCase);
-            return await SearchRadioStationsAsync(jpOnly ? "" : radioTag, limit: 36, japanOnly: jpOnly);
+            return await IfEnabled(SiteType.Radio, () => SearchRadioStationsAsync(jpOnly ? "" : radioTag, limit: 36, japanOnly: jpOnly));
         }
         if (q.StartsWith("podcast:", StringComparison.OrdinalIgnoreCase))
         {
             string podQuery = q["podcast:".Length..].Trim();
-            return await SearchPodcastsAsync(podQuery, limit: 36);
+            return await IfEnabled(SiteType.Podcast, () => SearchPodcastsAsync(podQuery, limit: 36));
         }
 
         var scTask = IfEnabled(SiteType.SoundCloud, () => SearchSoundCloudAsync(q, limitPerSite));
@@ -311,19 +314,14 @@ public class VideoSearchService
         var podcastTask = IfEnabled(SiteType.Podcast, () => SearchPodcastsAsync(q, 8));
         var radioTask = IfEnabled(SiteType.Radio, () => SearchRadioStationsAsync(q, 6));
         var biliTask = IfEnabled(SiteType.Bilibili, () => SearchBilibiliAsync(q + " 音楽 MV", 8));
-        await Task.WhenAll(scTask, ytTask, nicoTask, podcastTask, radioTask, biliTask);
 
         // ショート動画（62秒以下）や短すぎる効果音を除外して、楽曲・MV・ラジオ・Podcastだけを厳選
-        static List<VideoItem> FilterMusicTracks(List<VideoItem> src) =>
-            src.Where(x => !x.IsShortVideo && (x.DurationSeconds == 0 || x.DurationSeconds >= 65)).ToList();
+        static async Task<List<VideoItem>> FilterMusicTracks(Task<List<VideoItem>> source) =>
+            (await source).Where(x => !x.IsShortVideo && (x.DurationSeconds == 0 || x.DurationSeconds >= 65)).ToList();
 
-        return InterleaveMultiResults(
-            FilterMusicTracks(scTask.Result),
-            FilterMusicTracks(ytTask.Result),
-            FilterMusicTracks(nicoTask.Result),
-            podcastTask.Result,
-            radioTask.Result,
-            FilterMusicTracks(biliTask.Result));
+        return await WhenAllInterleavedAsync(onPartial,
+            FilterMusicTracks(scTask), FilterMusicTracks(ytTask), FilterMusicTracks(nicoTask),
+            podcastTask, radioTask, FilterMusicTracks(biliTask));
     }
 
     public async Task<List<VideoItem>> SearchNiconicoMusicAsync(string query, int limit = 14)
