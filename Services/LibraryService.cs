@@ -15,6 +15,7 @@ public class LibraryData
     public List<string> RecentSearches { get; set; } = [];
     public List<DanmakuComment> UserDanmaku { get; set; } = [];
     /// <summary>読み込まない（OFFにした）サイト。空ならすべて読み込む</summary>
+    public bool BilibiliDefaultApplied { get; set; }
     public List<SiteType> DisabledSites { get; set; } = [];
     /// <summary>左のメニュー（サイドバー）を隠しているか</summary>
     public bool SidebarCollapsed { get; set; }
@@ -38,6 +39,9 @@ public class AppSettings
     public int GainIndex { get; set; }             // 100% / 150% / 200% / 300%
     public int PresetIndex { get; set; }           // フラット / 重低音 / ボーカル / 夜間
     public int DanmakuIndex { get; set; }          // 標準 / 大きめ / 控えめ / OFF
+    public double Volume { get; set; } = 1.0;      // プレイヤーの音量 (0〜1)。動画が変わっても同じ音量にする
+    public bool Muted { get; set; }
+    public bool NormalizeLoudness { get; set; } = true; // サイト・動画ごとの音量差を自動でそろえる
     // 一覧・検索
     public int ShortsMode { get; set; }            // 0: 除外 / 1: ショートのみ / 2: すべて
     public int SortIndex { get; set; }
@@ -49,6 +53,7 @@ public class AppSettings
 public class LibraryService
 {
     private readonly string _filePath;
+    private bool _saveBlocked;
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
     public ObservableCollection<VideoItem> Favorites { get; } = [];
@@ -58,24 +63,28 @@ public class LibraryService
     public ObservableCollection<SubscribedChannel> Subscriptions { get; } = [];
     public ObservableCollection<string> RecentSearches { get; } = [];
     public List<DanmakuComment> UserDanmaku { get; } = [];
-    public HashSet<SiteType> DisabledSites { get; } = [];
+    public HashSet<SiteType> DisabledSites { get; } = [SiteType.Bilibili];
     public bool SidebarCollapsed { get; set; }
     public AppSettings Settings { get; private set; } = new();
 
     public string DataFilePath => _filePath;
+    public bool IsSaveBlocked => _saveBlocked;
 
     public event Action? CountsChanged;
 
-    public LibraryService()
+    public LibraryService() : this(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ZenTube", "library.json"))
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ZenTube");
-        Directory.CreateDirectory(dir);
-        _filePath = Path.Combine(dir, "library.json");
+    }
+
+    internal LibraryService(string filePath)
+    {
+        _filePath = filePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+        bool isNewLibrary = !File.Exists(_filePath);
         Load();
 
-        if (Playlists.Count == 0)
+        if (isNewLibrary && !_saveBlocked)
         {
             Playlists.Add(new CustomPlaylist { Name = "🎵 作業用BGM" });
             Playlists.Add(new CustomPlaylist { Name = "✨ 神曲・おすすめ" });
@@ -85,12 +94,21 @@ public class LibraryService
 
     public void Load()
     {
+        _saveBlocked = false;
         try
         {
             if (!File.Exists(_filePath)) return;
             var json = File.ReadAllText(_filePath);
             var data = JsonSerializer.Deserialize<LibraryData>(json, _jsonOptions);
-            if (data == null) return;
+            if (data == null) throw new JsonException("Library data is null.");
+            // コレクションを書き換える前に検証し、途中まで読み込んだ状態で保存しない。
+            if (data.Favorites == null || data.WatchLater == null || data.History == null ||
+                data.Favorites.Concat(data.WatchLater).Concat(data.History)
+                    .Concat((data.Playlists ?? []).SelectMany(p => p?.Items ??
+                        throw new JsonException("Playlist items are null.")))
+                    .Any(v => v == null || v.Author == null) ||
+                (data.Subscriptions ?? []).Any(s => s == null))
+                throw new JsonException("Invalid library data.");
 
             Subscriptions.Clear();
             if (data.Subscriptions != null)
@@ -147,20 +165,31 @@ public class LibraryService
             DisabledSites.Clear();
             if (data.DisabledSites != null)
                 DisabledSites.UnionWith(data.DisabledSites);
+            if (!data.BilibiliDefaultApplied && Enum.GetValues<SiteType>().Any(site => site is not (SiteType.Bilibili or SiteType.Dailymotion) && !DisabledSites.Contains(site)))
+                DisabledSites.Add(SiteType.Bilibili);
             SidebarCollapsed = data.SidebarCollapsed;
             Settings = data.Settings ?? new AppSettings();
 
             foreach (var item in Favorites) SyncItemFlags(item);
             foreach (var item in WatchLater) SyncItemFlags(item);
         }
-        catch
+        catch (Exception ex)
         {
-            // 読み込み失敗時は空の状態で開始
+            // 元ファイルと正常時のバックアップを保護する。この起動中は保存しない。
+            _saveBlocked = true;
+            ErrorLog.Write("Library.Load", ex);
+            try
+            {
+                File.Copy(_filePath, _filePath + $".unreadable-{Guid.NewGuid():N}");
+            }
+            catch (Exception backupError) { ErrorLog.Write("Library.PreserveUnreadable", backupError); }
         }
     }
 
     public void Save()
     {
+        if (_saveBlocked) return;
+        string tempPath = _filePath + $".{Guid.NewGuid():N}.tmp";
         try
         {
             var data = new LibraryData
@@ -172,16 +201,32 @@ public class LibraryService
                 Subscriptions = [.. Subscriptions],
                 RecentSearches = [.. RecentSearches],
                 UserDanmaku = [.. UserDanmaku],
+                BilibiliDefaultApplied = true,
                 DisabledSites = [.. DisabledSites],
                 SidebarCollapsed = SidebarCollapsed,
                 Settings = Settings
             };
             var json = JsonSerializer.Serialize(data, _jsonOptions);
-            File.WriteAllText(_filePath, json);
+            // 同じフォルダーに書き切ってから置換する。直前のデータは .bak に残す。
+            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+            if (File.Exists(_filePath))
+                File.Replace(tempPath, _filePath, _filePath + ".bak");
+            else
+                File.Move(tempPath, _filePath);
         }
-        catch
+        catch (Exception ex)
         {
-            // 保存失敗時は無視
+            ErrorLog.Write("Library.Save", ex);
+        }
+        finally
+        {
+            try { File.Delete(tempPath); }
+            catch (Exception ex) { ErrorLog.Write("Library.Cleanup", ex); }
         }
     }
 

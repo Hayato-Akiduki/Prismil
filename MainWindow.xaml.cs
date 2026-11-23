@@ -20,6 +20,14 @@ public partial class MainWindow : Window
     private readonly LibraryService _libraryService = new();
     private readonly AdBlockService _adBlockService = new();
     private readonly DispatcherTimer _sleepTimer;
+    private readonly DispatcherTimer _volumeSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
+
+    private void FlushVolumeSave()
+    {
+        if (!_volumeSaveTimer.IsEnabled) return;
+        _volumeSaveTimer.Stop();
+        _libraryService.Save();
+    }
 
     private List<VideoItem> _discoverItems = [];
     private List<VideoItem> _musicItems = [];
@@ -35,6 +43,7 @@ public partial class MainWindow : Window
     private CoreWebView2Environment? _webViewEnv;
     private bool _isMusicBgListen = true;
     private int _shortsFilterMode; // 0: ショート除外, 1: ショートのみ, 2: すべて表示
+    private bool IsDiscoverView => NavHome.IsChecked == true || NavShorts.IsChecked == true;
     private bool _isLoopMode;
     private bool _isAutoNext = true;
     private bool _isShuffleMode;
@@ -55,6 +64,7 @@ public partial class MainWindow : Window
     private string _activeQueueTab = "Current";
     private string _lastTopicKeyword = "";
     private string _lastMusicStation = "";
+    private int _musicGeneration;
     private string _lastSearchQuery = "";
     private string? _gachaTheme;
     private bool HasSearchResultsToReload => _gachaTheme != null || _lastSearchQuery.Length > 0;
@@ -102,6 +112,8 @@ public partial class MainWindow : Window
     private int _homeGeneration;
     private int _statusGeneration;
     private bool _isHomeLoading;
+    private bool _showingCachedDiscoverFallback;
+    private List<VideoItem>? _pendingDiscoverItems;
     /// <summary>ボタン側でホームを読み込み直すとき、サイト切り替えによる自動の読み込み直しを止める</summary>
     private bool _suppressHomeAutoReload;
 
@@ -116,6 +128,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _volumeSaveTimer.Tick += (_, _) => FlushVolumeSave();
+        Closed += (_, _) => FlushVolumeSave();
+        // 初回からタイトルバーや操作が画面外にはみ出さないサイズにする。
+        Width = Math.Max(MinWidth, Math.Min(Width, SystemParameters.WorkArea.Width - 32));
+        Height = Math.Max(MinHeight, Math.Min(Height, SystemParameters.WorkArea.Height - 32));
 
         // 前回のサイドバーの開閉状態を反映
         _isSidebarOpen = !_libraryService.SidebarCollapsed;
@@ -377,7 +394,7 @@ public partial class MainWindow : Window
             await LoadSubscriptionsFeedAsync();
         else if (NavSearch.IsChecked == true && HasSearchResultsToReload)
             await ReloadSearchResultsAsync();
-        else if (NavHome.IsChecked == true)
+        else if (IsDiscoverView)
             await LoadDiscoverFeedAsync(_lastTopicKeyword);
     }
 
@@ -397,8 +414,16 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_libraryService.IsSaveBlocked)
+            MessageBox.Show(this,
+                "保存データを読み込めませんでした。元のファイルを保護するため、今回はお気に入りや設定の変更を保存しません。\n" +
+                "アプリを閉じて保存データを確認してください。直前の保存があれば library.json.bak に残っています。\n\n" +
+                _libraryService.DataFilePath,
+                "Prismil — 保存データの読み込みエラー", MessageBoxButton.OK, MessageBoxImage.Warning);
         ApplySavedSettings(); // 前回の設定に戻す（最初の読み込みより先に）
-        NavHome.IsChecked = true;
+        _suppressHomeAutoReload = true;
+        try { (_shortsFilterMode == 1 ? NavShorts : NavHome).IsChecked = true; }
+        finally { _suppressHomeAutoReload = false; }
         AppVersionText.Text = $"Prismil v{UpdateService.CurrentVersionText}";
         var initWebTask = InitPlayerWebViewAsync();
         var loadFeedTask = LoadDiscoverFeedAsync();
@@ -502,6 +527,22 @@ public partial class MainWindow : Window
                     var cur = _currentPlayingItem;
                     if (cur != null && cur.Site == SiteType.Niconico && PrismilPlayer.IsPlayerUrl(core.Source))
                         core.Navigate(cur.WatchUrl);
+                }
+                else if (msg != null && msg.StartsWith("volume:"))
+                {
+                    // プレイヤーで音量を変えた → 覚えて、次の動画もこの音量で始める
+                    var parts = msg[7..].Split(';');
+                    if (parts.Length == 2 && double.TryParse(parts[0], System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out double vol))
+                    {
+                        PrismilPlayer.Volume = Math.Clamp(vol, 0, 1);
+                        PrismilPlayer.Muted = parts[1] == "1";
+                        var s = _libraryService.Settings;
+                        s.Volume = PrismilPlayer.Volume;
+                        s.Muted = PrismilPlayer.Muted;
+                        _volumeSaveTimer.Stop();
+                        _volumeSaveTimer.Start();
+                    }
                 }
                 else if (msg == "theater_toggle")
                 {
@@ -654,7 +695,8 @@ public partial class MainWindow : Window
                 $"if (window.setZenTubeLoop) window.setZenTubeLoop({loopArg});" +
                 $"if (window.setZenTubePlaybackRate) window.setZenTubePlaybackRate({rateArg});" +
                 $"if (window.setZenTubeVideoFx) window.setZenTubeVideoFx({mirrorArg}, {dimArg});" +
-                $"if (window.setZenTubeAudioProfile) window.setZenTubeAudioProfile({gainArg}, '{_audioPreset}');");
+                $"if (window.setZenTubeAudioProfile) window.setZenTubeAudioProfile({gainArg}, '{_audioPreset}');" +
+                $"if (window.setZenTubeLoudness) window.setZenTubeLoudness({(_libraryService.Settings.NormalizeLoudness ? "true" : "false")});");
         }
         catch
         {
@@ -665,7 +707,7 @@ public partial class MainWindow : Window
     // =========================================================================
     // トレンド取得・Musicモード取得 ＆ 全サイト横断検索
     // =========================================================================
-    private async Task LoadDiscoverFeedAsync(string? topicKeyword = null)
+    private async Task LoadDiscoverFeedAsync(string? topicKeyword = null, bool forceRefresh = false)
     {
         _lastTopicKeyword = topicKeyword ?? "";
 
@@ -674,16 +716,55 @@ public partial class MainWindow : Window
         int generation = ++_homeGeneration;
         _homeSite = site;
         _homeCursor = null;
-        if (NavHome.IsChecked == true) _scrollCardsToTopOnNextSet = true;
+        if (IsDiscoverView) _scrollCardsToTopOnNextSet = true;
+
+        int shortsMode = _shortsFilterMode;
+        string? cachePath = string.IsNullOrEmpty(_lastTopicKeyword)
+            ? DiscoverFeedCache.GetPath(_libraryService.DataFilePath, site, shortsMode)
+            : null;
+        bool CanDisplay(VideoItem item) => _searchService.IsSiteEnabled(item.Site) &&
+            (site == null || site == item.Site) && (shortsMode == 2 || item.IsShortVideo == (shortsMode == 1));
 
         _isHomeLoading = true;
-        int statusGeneration;
+        _showingCachedDiscoverFallback = false;
+        _pendingDiscoverItems = null;
+        BtnShowLatestDiscover.Visibility = Visibility.Collapsed;
+        int? statusGeneration = null;
+        var cache = cachePath == null ? null : DiscoverFeedCache.Read(cachePath);
+        var cachedItems = cache?.Items.Where(CanDisplay).ToList() ?? [];
+        int enabledSites = Enum.GetValues<SiteType>().Where(_searchService.IsSiteEnabled)
+            .Aggregate(0, (mask, enabledSite) => mask | (1 << (int)enabledSite));
+        bool hasCachedItems = cachedItems.Count > 0;
+        if (hasCachedItems)
+        {
+            _libraryService.SyncCollectionFlags(cachedItems);
+            _discoverItems = cachedItems;
+            if (!forceRefresh && cache!.IsFresh(enabledSites))
+            {
+                _isHomeLoading = false;
+                if (site is SiteType cachedSite && cache.HasMore)
+                {
+                    _homeCursor = new VideoSearchService.SiteSearchCursor(cachedSite, "", shortsOnly: shortsMode == 1)
+                    {
+                        PagesLoaded = 1
+                    };
+                    _homeCursor.SeenKeys.UnionWith(cache.Items.Select(item => item.UniqueKey));
+                }
+                if (IsDiscoverView)
+                {
+                    HideLoadingOverlay();
+                    RefreshDisplayedCards();
+                }
+                return;
+            }
+            if (IsDiscoverView) RefreshDisplayedCards(partial: true);
+        }
         List<VideoItem> items;
         try
         {
             if (site is SiteType s)
             {
-                statusGeneration = ShowLoadingOverlay(
+                if (!hasCachedItems) statusGeneration = ShowLoadingOverlay(
                     string.IsNullOrEmpty(_lastTopicKeyword)
                         ? $"{SiteLabel(s)} のおすすめを取得中..."
                         : $"「{_lastTopicKeyword}」の動画を{SiteLabel(s)}から取得中...",
@@ -693,15 +774,15 @@ public partial class MainWindow : Window
             }
             else
             {
-                statusGeneration = ShowLoadingOverlay(
-                    string.IsNullOrEmpty(_lastTopicKeyword)
+                if (!hasCachedItems) statusGeneration = ShowLoadingOverlay(
+                    _shortsFilterMode == 1 ? "ショート動画を探しています…" : string.IsNullOrEmpty(_lastTopicKeyword)
                         ? "5サイトのトレンド・音楽・配信を取得中..."
                         : $"「{_lastTopicKeyword}」の動画を全サイトから取得中...",
-                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch から並列取得しています");
+                    "設定で有効にしたサイトから取得しています");
                 // 届いたサイトの結果から先に表示する
                 void OnPartial(List<VideoItem> partialItems)
                 {
-                    if (generation != _homeGeneration || NavHome.IsChecked != true) return;
+                    if (hasCachedItems || generation != _homeGeneration || !IsDiscoverView) return;
                     _libraryService.SyncCollectionFlags(partialItems);
                     _discoverItems = partialItems;
                     RefreshDisplayedCards(partial: true);
@@ -719,11 +800,30 @@ public partial class MainWindow : Window
         // 待っている間に別の読み込みが始まっていたら、この結果は使わない
         if (generation != _homeGeneration) return;
 
+        if (cachePath != null && items.Any(CanDisplay))
+        {
+            DiscoverFeedCache.Write(cachePath, new(items, DateTimeOffset.UtcNow, enabledSites, _homeCursor?.HasMore == true));
+            if (hasCachedItems)
+            {
+                _pendingDiscoverItems = items;
+                if (IsDiscoverView && _activeCustomPlaylist == null && _activeSubscribedChannel == null)
+                    RefreshDisplayedCards();
+                return;
+            }
+        }
+        else if (hasCachedItems)
+        {
+            // 空の応答で保存済みの一覧を消さない。取得位置が異なるためページ送りも止める。
+            items = cachedItems;
+            _homeCursor = null;
+            _showingCachedDiscoverFallback = true;
+        }
+
         _libraryService.SyncCollectionFlags(items);
         _discoverItems = items;
 
         if (statusGeneration == _statusGeneration) HideLoadingOverlay();
-        if (NavHome.IsChecked == true)
+        if (IsDiscoverView)
             RefreshDisplayedCards();
     }
 
@@ -745,6 +845,7 @@ public partial class MainWindow : Window
 
     private async Task LoadMusicFeedAsync(string? stationKeyword = null)
     {
+        int generation = ++_musicGeneration;
         _lastMusicStation = stationKeyword ?? "";
         if ((_lastMusicStation.StartsWith("radio:", StringComparison.OrdinalIgnoreCase) && !_searchService.IsSiteEnabled(SiteType.Radio)) ||
             (_lastMusicStation.StartsWith("podcast:", StringComparison.OrdinalIgnoreCase) && !_searchService.IsSiteEnabled(SiteType.Podcast)))
@@ -761,13 +862,16 @@ public partial class MainWindow : Window
             RefreshDisplayedCards(partial: true);
         }
         var items = await _searchService.SearchMusicFeedAsync(_lastMusicStation, limitPerSite: 12, onPartial: OnPartial);
+        if (generation != _musicGeneration) return;
         _libraryService.SyncCollectionFlags(items);
         _musicItems = items;
         NavMusicMode.Tag = items.Count > 0 ? items.Count.ToString() : null;
 
-        HideLoadingOverlay();
         if (NavMusicMode.IsChecked == true)
+        {
+            HideLoadingOverlay();
             RefreshDisplayedCards();
+        }
     }
 
     private async Task ExecuteSearchAsync(string query, bool rememberQuery = true)
@@ -824,7 +928,7 @@ public partial class MainWindow : Window
             {
                 ShowLoadingOverlay(
                     $"「{query}」を全サイトで検索中...",
-                    "YouTube・ニコニコ・SoundCloud・bilibili・Twitch などを同時に検索しています");
+                    "設定で有効にしたサイトを検索しています");
                 // 届いたサイトの結果から先に表示する
                 void OnPartial(List<VideoItem> partialItems)
                 {
@@ -866,7 +970,7 @@ public partial class MainWindow : Window
     /// <summary>今の一覧（検索結果・ホームのおすすめ）の続きを読み込んで、後ろに足す</summary>
     private async Task LoadMoreCurrentAsync()
     {
-        if (NavHome.IsChecked == true)
+        if (IsDiscoverView)
         {
             await LoadMoreHomeAsync();
             return;
@@ -899,7 +1003,7 @@ public partial class MainWindow : Window
     private async Task LoadMoreHomeAsync()
     {
         var cursor = _homeCursor;
-        if (_isLoadingMore || _isHomeLoading || cursor == null || !cursor.HasMore) return;
+        if (_isLoadingMore || _isHomeLoading || _pendingDiscoverItems != null || cursor == null || !cursor.HasMore) return;
         _isLoadingMore = true;
         int generation = _homeGeneration;
         UpdatePager();
@@ -924,7 +1028,7 @@ public partial class MainWindow : Window
     {
         if (_activeCustomPlaylist != null || _activeSubscribedChannel != null) return false;
         if (NavSearch.IsChecked == true) return _searchItems.Count > 0 && CanLoadMoreSearch();
-        if (NavHome.IsChecked == true) return _discoverItems.Count > 0 && _homeCursor?.HasMore == true;
+        if (IsDiscoverView) return _pendingDiscoverItems == null && _discoverItems.Count > 0 && _homeCursor?.HasMore == true;
         return false;
     }
 
@@ -1023,7 +1127,7 @@ public partial class MainWindow : Window
     /// <summary>ホーム画面で「サイト別に見る」を切り替えたら、そのサイト（または全サイト）のおすすめを読み込み直す</summary>
     private async Task<bool> ReloadHomeIfSiteChangedAsync()
     {
-        if (_suppressHomeAutoReload || NavHome.IsChecked != true) return false;
+        if (_suppressHomeAutoReload || !IsDiscoverView) return false;
         if (_activeCustomPlaylist != null || _activeSubscribedChannel != null) return false;
         if (SelectedSiteFilter() == _homeSite) return false;
         await LoadDiscoverFeedAsync(_lastTopicKeyword);
@@ -1116,8 +1220,12 @@ public partial class MainWindow : Window
                     ? $"{SiteLabel(hs)} のおすすめ"
                     : $"トピック: {_lastTopicKeyword}（{SiteLabel(hs)}）"
                 : string.IsNullOrEmpty(_lastTopicKeyword)
-                    ? "🔥 5サイト横断トレンド"
-                    : $"🔥 トピック: {_lastTopicKeyword}";
+                    ? "5サイト横断トレンド"
+                    : $"トピック: {_lastTopicKeyword}";
+            if (NavShorts.IsChecked == true)
+                headerTitle = "ショート動画" +
+                    (_homeSite is SiteType shortSite ? $" · {SiteLabel(shortSite)}" : "") +
+                    (string.IsNullOrEmpty(_lastTopicKeyword) ? "" : $" · {_lastTopicKeyword}");
         }
 
         // サイト別に見る（選んだサイトだけを表示）
@@ -1182,11 +1290,17 @@ public partial class MainWindow : Window
         SetCardItems(finalList.Skip(_cardPage * CardsPerPage).Take(CardsPerPage).ToList());
 
         ViewHeaderTitle.Text = headerTitle;
+        DiscoverTopics.Visibility = IsDiscoverView || NavSearch.IsChecked == true
+            ? Visibility.Visible : Visibility.Collapsed;
+        BtnShowLatestDiscover.Visibility = IsDiscoverView && !isCustomPlaylist && !isSingleChannel && _pendingDiscoverItems != null
+            ? Visibility.Visible : Visibility.Collapsed;
         bool canMore = CanLoadMoreCurrent();
         string countText = $"{finalList.Count} 件";
         if (pageCount > 1 || canMore)
             countText += $"・{_cardPage + 1} / {pageCount}{(canMore ? "+" : "")} ページ";
         if (partial) countText += "（ほかのサイトを読み込み中…）";
+        if (IsDiscoverView && !isCustomPlaylist && !isSingleChannel && _showingCachedDiscoverFallback)
+            countText += " · 更新できませんでした（前回の一覧）";
         ViewHeaderCount.Text = countText;
 
         BtnClearHistory.Visibility = showClearHistory ? Visibility.Visible : Visibility.Collapsed;
@@ -1218,7 +1332,7 @@ public partial class MainWindow : Window
                 else if (NavHistory.IsChecked == true)
                     ShowEmptyState("視聴履歴はまだありません", "動画を再生すると自動的に履歴が記録されます");
                 else if (NavSearch.IsChecked == true && !HasSearchResultsToReload)
-                    ShowEmptyState("キーワードを入力して横断検索", "上の検索バーから YouTube・ニコニコ動画・bilibili をまとめて検索できます");
+                    ShowEmptyState("キーワードを入力して横断検索", "上の検索バーから有効なサイトをまとめて検索できます");
                 else
                     ShowEmptyState("該当する動画が見つかりませんでした", "別のキーワードを試すか、左の「サイト別に見る」で別のサイトを選んでください");
             }
@@ -1317,7 +1431,7 @@ public partial class MainWindow : Window
             ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
             : NeutralBorderBrush;
         if (showComments) EnsureCommentsLoaded();
-        else SideQueueItemsControl.ItemsSource = queueSource.ToList();
+        SideQueueItemsControl.ItemsSource = queueSource.ToList();
 
         BtnQueueCurrent.BorderBrush = _activeQueueTab == "Current"
             ? new SolidColorBrush(Color.FromRgb(99, 102, 241))
@@ -1361,16 +1475,17 @@ public partial class MainWindow : Window
             _upNextSourceIndex = -1;
         }
         var searchPart = _upNextSourceList.Skip(_upNextSourceIndex + 1)
-            .Where(x => x.UniqueKey != current.UniqueKey)
+            .Where(x => x.UniqueKey != current.UniqueKey && _searchService.IsSiteEnabled(x.Site))
             .Take(30).ToList();
 
         // おすすめ：再生中の動画の関連動画 ＋ 最近見た動画（2本）の関連動画
         var watched = new HashSet<string>(_libraryService.History.Select(h => h.UniqueKey)) { current.UniqueKey };
         var recentSeeds = _libraryService.History
-            .Where(h => h.UniqueKey != current.UniqueKey && RecommendationService.Supports(h))
+            .Where(h => h.UniqueKey != current.UniqueKey && _searchService.IsSiteEnabled(h.Site) && RecommendationService.Supports(h))
             .Take(2).ToList();
 
-        var currentTask = _recommendationService.GetRelatedAsync(current);
+        var currentTask = _searchService.IsSiteEnabled(current.Site)
+            ? _recommendationService.GetRelatedAsync(current) : Task.FromResult(new List<VideoItem>());
         var seedTasks = recentSeeds.Select(s => _recommendationService.GetRelatedAsync(s)).ToList();
         List<VideoItem> related;
         List<List<VideoItem>> fromHistory;
@@ -1391,7 +1506,8 @@ public partial class MainWindow : Window
         void AddRec(VideoItem v, string reason)
         {
             if (watched.Contains(v.UniqueKey) || !used.Add(v.UniqueKey)) return;
-            if (_shortsFilterMode == 0 && v.IsShortVideo) return; // ショート除外中は出さない
+            if (!_searchService.IsSiteEnabled(v.Site) || (_shortsFilterMode == 0 && v.IsShortVideo) ||
+                (_shortsFilterMode == 1 && !v.IsShortVideo)) return; // ショート除外中は出さない
             v.QueueReason = reason;
             recPart.Add(v);
         }
@@ -1418,7 +1534,7 @@ public partial class MainWindow : Window
         _libraryService.SyncCollectionFlags(queue);
         _upNext = queue;
         _upNextKey = current.UniqueKey;
-        if (_activeQueueTab == "Current") RefreshSideQueue();
+        if (_activeQueueTab is "Current" or "Comments") RefreshSideQueue();
     }
 
     private void UpdateLibraryBadges()
@@ -2092,7 +2208,25 @@ public partial class MainWindow : Window
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
         // トレンド・検索以外（お気に入り・履歴・Musicモードなど）へ移ったら「サイト別に見る」モードを抜ける
-        if (sender != NavHome && sender != NavSearch) LeaveSiteMode();
+        if (sender != NavHome && sender != NavShorts && sender != NavSearch) LeaveSiteMode();
+
+        if (sender == NavShorts || sender == NavHome)
+        {
+            int mode = sender == NavShorts ? 1 : (_shortsFilterMode == 1 ? 0 : _shortsFilterMode);
+            _shortsFilterMode = mode;
+            SetShortsCombo.SelectedIndex = mode;
+            SaveSettings();
+            SwitchToCardBrowserView();
+            RefreshDisplayedCards();
+            if (!_suppressHomeAutoReload)
+            {
+                _siteSelectionChanged = false;
+                var feedTask = LoadDiscoverFeedAsync(_lastTopicKeyword);
+                await ApplyZenModeToPlayerAsync();
+                await feedTask;
+            }
+            return;
+        }
 
         if (NavSettings.IsChecked == true)
         {
@@ -2113,7 +2247,7 @@ public partial class MainWindow : Window
         {
             _siteSelectionChanged = false;
             await ReloadAfterSiteChangeAsync();
-            if (NavHome.IsChecked == true || NavSearch.IsChecked == true ||
+            if (IsDiscoverView || NavSearch.IsChecked == true ||
                 NavMusicMode.IsChecked == true || NavSubscriptionsFeed.IsChecked == true)
                 return;
         }
@@ -2173,6 +2307,7 @@ public partial class MainWindow : Window
         SetShuffle.IsChecked = _isShuffleMode;
         SetMusicBgListen.IsChecked = _isMusicBgListen;
         SetTopmost.IsChecked = Topmost;
+        SetNormalize.IsChecked = _libraryService.Settings.NormalizeLoudness;
         _applyingSettings = true;
         SetShortsCombo.SelectedIndex = _shortsFilterMode;
         _applyingSettings = false;
@@ -2192,6 +2327,12 @@ public partial class MainWindow : Window
         else if (cb == SetMusicBgListen && want != _isMusicBgListen) MusicBgListenToggle_Click(cb, e);
         else if (cb == SetAdBlock && want != _adBlockService.IsEnabled) AdBlockToggle_Click(cb, e);
         else if (cb == SetTopmost && want != Topmost) PinTopmost_Click(cb, e);
+        else if (cb == SetNormalize && want != _libraryService.Settings.NormalizeLoudness)
+        {
+            _libraryService.Settings.NormalizeLoudness = want;
+            if (!_applyingSettings) _libraryService.Save();
+            _ = ApplyZenModeToPlayerAsync();
+        }
     }
 
     private void ClearHistorySetting_Click(object sender, RoutedEventArgs e)
@@ -2228,6 +2369,8 @@ public partial class MainWindow : Window
     private void ApplySavedSettings()
     {
         var s = _libraryService.Settings;
+        PrismilPlayer.Volume = Math.Clamp(s.Volume, 0, 1);
+        PrismilPlayer.Muted = s.Muted;
         _applyingSettings = true;
         try
         {
@@ -2284,9 +2427,8 @@ public partial class MainWindow : Window
         string station = btn.Tag as string ?? "";
         NavMusicMode.IsChecked = true;
         SwitchToCardBrowserView();
-        await LoadMusicFeedAsync(station);
         FilterSoundCloud.IsChecked = true;
-        RefreshDisplayedCards();
+        await LoadMusicFeedAsync(station);
     }
 
     private void MusicBgListenToggle_Click(object sender, RoutedEventArgs e)
@@ -2370,7 +2512,7 @@ public partial class MainWindow : Window
         }
 
         // サイトを選んだら、どの画面にいても、そのサイトのおすすめ動画の画面を開く
-        bool onHome = NavHome.IsChecked == true && _activeCustomPlaylist == null && _activeSubscribedChannel == null;
+        bool onHome = IsDiscoverView && _activeCustomPlaylist == null && _activeSubscribedChannel == null;
         if (SelectedSiteFilter() != null && !onHome)
         {
             _activeCustomPlaylist = null;
@@ -2403,7 +2545,7 @@ public partial class MainWindow : Window
         try
         {
             FilterAll.IsChecked = true;
-            NavHome.IsChecked = true;
+            if (!IsDiscoverView) NavHome.IsChecked = true;
         }
         finally { _suppressHomeAutoReload = false; }
         SwitchToCardBrowserView();
@@ -2413,6 +2555,7 @@ public partial class MainWindow : Window
     private async void QuickSiteFilterChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn || btn.Tag is not string siteName) return;
+        bool wasShortsOnly = _shortsFilterMode == 1;
         _activeCustomPlaylist = null;
         _activeSubscribedChannel = null;
         _suppressHomeAutoReload = true;
@@ -2427,7 +2570,7 @@ public partial class MainWindow : Window
         SwitchToCardBrowserView();
 
         // そのサイトのおすすめを読み込む（すでに表示中ならそのまま）
-        if (_homeSite != SelectedSiteFilter() || _discoverItems.Count == 0 || !string.IsNullOrEmpty(_lastTopicKeyword))
+        if (wasShortsOnly || _homeSite != SelectedSiteFilter() || _discoverItems.Count == 0 || !string.IsNullOrEmpty(_lastTopicKeyword))
             await LoadDiscoverFeedAsync("");
         else
             RefreshDisplayedCards();
@@ -2651,6 +2794,19 @@ public partial class MainWindow : Window
         await ApplyZenModeToPlayerAsync();
     }
 
+    private void ShowLatestDiscover_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingDiscoverItems == null || !IsDiscoverView || _activeCustomPlaylist != null || _activeSubscribedChannel != null)
+            return;
+
+        _discoverItems = _pendingDiscoverItems;
+        _pendingDiscoverItems = null;
+        _libraryService.SyncCollectionFlags(_discoverItems);
+        _cardPage = 0;
+        _scrollCardsToTopOnNextSet = true;
+        RefreshDisplayedCards();
+    }
+
     private async void RefreshFeed_Click(object sender, RoutedEventArgs e)
     {
         if (_activeSubscribedChannel != null)
@@ -2673,8 +2829,12 @@ public partial class MainWindow : Window
         {
             _activeCustomPlaylist = null;
             _activeSubscribedChannel = null;
-            NavHome.IsChecked = true;
-            await LoadDiscoverFeedAsync(_lastTopicKeyword);
+            if (!IsDiscoverView)
+            {
+                NavHome.IsChecked = true;
+                return; // メニュー切り替え側で読み込む
+            }
+            await LoadDiscoverFeedAsync(_lastTopicKeyword, forceRefresh: true);
         }
     }
 
@@ -3032,13 +3192,23 @@ public partial class MainWindow : Window
         _shortsFilterMode = SetShortsCombo.SelectedIndex;
         SaveSettings();
 
+        if (IsDiscoverView)
+        {
+            var target = _shortsFilterMode == 1 ? NavShorts : NavHome;
+            if (target.IsChecked != true)
+            {
+                target.IsChecked = true;
+                return; // メニュー切り替え側でプレイヤー設定と一覧を更新する
+            }
+        }
+
         await ApplyZenModeToPlayerAsync();
 
         if (_shortsFilterMode == 1)
         {
             if (NavSearch.IsChecked == true && HasSearchResultsToReload)
                 await ReloadSearchResultsAsync();
-            else if (NavHome.IsChecked == true)
+            else if (IsDiscoverView)
                 await LoadDiscoverFeedAsync(_lastTopicKeyword);
             else
                 RefreshDisplayedCards();
@@ -3474,7 +3644,7 @@ public partial class MainWindow : Window
                     FilterNiconico.IsChecked = true;
                     e.Handled = true;
                     break;
-                case Key.D4:
+                case Key.D4 when _searchService.IsSiteEnabled(SiteType.Bilibili):
                     FilterBilibili.IsChecked = true;
                     e.Handled = true;
                     break;
@@ -3494,7 +3664,8 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
         else if (_shortsFilterMode == 1 && PlayerView.Visibility == Visibility.Visible &&
-                 !SearchBox.IsKeyboardFocused)
+                 Keyboard.FocusedElement is not TextBox && Keyboard.Modifiers == ModifierKeys.None &&
+                 (e.Key == Key.Down || e.Key == Key.Up))
         {
             if (e.Key == Key.Down)
             {

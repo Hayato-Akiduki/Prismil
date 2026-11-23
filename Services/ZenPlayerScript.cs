@@ -30,8 +30,29 @@ public static class ZenPlayerScript
             window.__zentubeDim = false;
             window.__zentubeAudioGain = 1.0;
             window.__zentubeAudioPreset = 'normal';
+            window.__zentubeNormalize = true;     // サイト間の音量差をそろえる
             window.__zentubePointA = null;
+
+            // SoundCloud などは画面に置かない audio 要素で鳴らすので、再生されたメディアを覚えておく
+            const prismilPlayedMedia = [];
+            try {
+                const origPlay = HTMLMediaElement.prototype.play;
+                HTMLMediaElement.prototype.play = function() {
+                    try { if (prismilPlayedMedia.indexOf(this) < 0) prismilPlayedMedia.push(this); } catch {}
+                    return origPlay.apply(this, arguments);
+                };
+            } catch {}
             window.__zentubePointB = null;
+            // サイト自身が Web Audio に通したメディア（SoundCloud など）は、こちらからは同じ要素を Web Audio に通せない。
+            // サイトの音声ノードを覚えておき、それを横から測る
+            try {
+                const origCmes = AudioContext.prototype.createMediaElementSource;
+                AudioContext.prototype.createMediaElementSource = function(el) {
+                    const node = origCmes.apply(this, arguments);
+                    try { if (el && !el.__zentubeOwnSource) el.__zentubeSiteSource = node; } catch {}
+                    return node;
+                };
+            } catch {}
             window.__zentubeTimedComments = [];   // 弾幕にするコメント（時間指定あり・なしの両方）
             window.__zentubeDmShownText = new Set(); // 一度流した文面
             window.__zentubeDmScheduled = false;
@@ -788,18 +809,61 @@ public static class ZenPlayerScript
                 }
             }
 
-            // Web Audio API による音量ブースト（最大300%）＆ 音質イコライザー
+            // Web Audio API による音量ブースト（最大300%）＆ 音質イコライザー ＆ 音量の自動調整
+            // 自動調整は、鳴っている音の大きさ（RMS）を測って、どのサイトでも同じくらいの大きさになるよう少しずつ合わせる
+            const LOUD_TARGET_DB = -16;   // そろえる先の大きさ
+            const LOUD_MAX_BOOST_DB = 10; // 小さい動画は最大 +10dB まで上げる
+            const LOUD_MAX_CUT_DB = -12;  // 大きい動画は最大 -12dB まで下げる
+
+            // 別サイトの音声で CORS 許可が無いと Web Audio を通した途端に無音になるので、その時は触らない
+            function canRouteAudio(media) {
+                const src = media.currentSrc || media.src || '';
+                if (!src) return false;
+                if (src.startsWith('blob:') || src.startsWith('data:')) return true;
+                try {
+                    if (new URL(src, location.href).origin === location.origin) return true;
+                } catch { return false; }
+                return media.crossOrigin === 'anonymous' || media.crossOrigin === 'use-credentials';
+            }
+
             function setupAudioChain(video) {
                 if (!video) return;
-                if (window.__zentubeAudioGain === 1.0 && window.__zentubeAudioPreset === 'normal' && !video.__zentubeAudioCtx) {
+                const wantsFx = window.__zentubeAudioGain !== 1.0 || window.__zentubeAudioPreset !== 'normal';
+                if (video.__zentubeAudioFailed) return;
+                // サイトが先に Web Audio に通している時は、測るだけにして音量（volume）で合わせる
+                if (video.__zentubeSiteSource && !video.__zentubeAudioCtx) {
+                    if (!video.__zentubeAnalyser && window.__zentubeNormalize) {
+                        try {
+                            const node = video.__zentubeSiteSource;
+                            const analyser = node.context.createAnalyser();
+                            analyser.fftSize = 2048;
+                            node.connect(analyser);
+                            video.__zentubeAnalyser = analyser;
+                            video.__zentubeLevelByVolume = true;
+                            video.__zentubeLoud = { energy: 0, seconds: 0, buf: new Float32Array(analyser.fftSize), src: video.currentSrc };
+                        } catch { video.__zentubeAudioFailed = true; }
+                    }
                     return;
+                }
+                if (!video.__zentubeAudioCtx) {
+                    if (!wantsFx && !window.__zentubeNormalize) return;
+                    if (video.readyState < 1 || !canRouteAudio(video)) return;
                 }
                 try {
                     if (!video.__zentubeAudioCtx) {
                         const AudioCtx = window.AudioContext || window.webkitAudioContext;
                         if (!AudioCtx) return;
                         const ctx = new AudioCtx();
-                        const source = ctx.createMediaElementSource(video);
+                        let source;
+                        try {
+                            video.__zentubeOwnSource = true;
+                            source = ctx.createMediaElementSource(video);
+                        } catch {
+                            // つなげない時は作った AudioContext を閉じ、この要素ではもう試さない
+                            video.__zentubeAudioFailed = true;
+                            ctx.close().catch(() => {});
+                            return;
+                        }
                         const bassFilter = ctx.createBiquadFilter();
                         bassFilter.type = 'lowshelf';
                         bassFilter.frequency.value = 180;
@@ -810,16 +874,32 @@ public static class ZenPlayerScript
                         vocalFilter.Q.value = 1.0;
 
                         const gainNode = ctx.createGain();
+                        const levelNode = ctx.createGain();
+                        // 上げすぎて音が割れないように、最後に軽いリミッターを入れる
+                        const limiter = ctx.createDynamicsCompressor();
+                        limiter.threshold.value = -2;
+                        limiter.knee.value = 2;
+                        limiter.ratio.value = 20;
+                        limiter.attack.value = 0.003;
+                        limiter.release.value = 0.25;
+                        const analyser = ctx.createAnalyser();
+                        analyser.fftSize = 2048;
 
+                        source.connect(analyser);
                         source.connect(bassFilter);
                         bassFilter.connect(vocalFilter);
                         vocalFilter.connect(gainNode);
-                        gainNode.connect(ctx.destination);
+                        gainNode.connect(levelNode);
+                        levelNode.connect(limiter);
+                        limiter.connect(ctx.destination);
 
                         video.__zentubeAudioCtx = ctx;
                         video.__zentubeBassFilter = bassFilter;
                         video.__zentubeVocalFilter = vocalFilter;
                         video.__zentubeGainNode = gainNode;
+                        video.__zentubeLevelNode = levelNode;
+                        video.__zentubeAnalyser = analyser;
+                        video.__zentubeLoud = { energy: 0, seconds: 0, buf: new Float32Array(analyser.fftSize), src: video.currentSrc };
                     }
 
                     if (video.__zentubeAudioCtx.state === 'suspended') {
@@ -842,7 +922,60 @@ public static class ZenPlayerScript
                         video.__zentubeBassFilter.gain.value = 0.0;
                         video.__zentubeVocalFilter.gain.value = 0.0;
                     }
+                    if (!window.__zentubeNormalize) {
+                        video.__zentubeLevelNode.gain.setTargetAtTime(1.0, video.__zentubeAudioCtx.currentTime, 0.3);
+                    }
                 } catch {}
+            }
+
+            // 使う人の音量 × 自動調整の倍率 を要素の volume にする（volume で合わせる時だけ倍率がかかる）
+            function levelFactor(media) {
+                return (media.__zentubeLevelByVolume && window.__zentubeNormalize) ? (media.__zentubeLevelFactor || 1) : 1;
+            }
+            function applyWantedVolume(media) {
+                if (media.__zentubeWantVol === undefined) return;
+                const v = Math.max(0, Math.min(1, media.__zentubeWantVol * levelFactor(media)));
+                if (Math.abs(media.volume - v) > 0.004) { try { media.volume = v; } catch {} }
+            }
+            // 画面のプレイヤーに知らせる音量（自動調整の倍率を除いた、使う人が選んだ音量）
+            function reportedVolume(media) {
+                // 倍率をかけていない時は実際の volume をそのまま返す（サイトが勝手に変えたら画面側が直せるように）
+                return (media.__zentubeLevelByVolume && media.__zentubeWantVol !== undefined) ? media.__zentubeWantVol : media.volume;
+            }
+
+            // 0.25秒ごとに音の大きさを測り、自動調整の倍率を少しずつ動かす
+            function measureLoudness(video) {
+                const L = video && video.__zentubeLoud;
+                if (!L || !window.__zentubeNormalize || wasAdPlaying) return;
+                if (video.paused || video.muted || video.volume < 0.03) return;
+                // 曲（動画）が変わったら測り直す
+                if (video.currentSrc !== L.src) { L.src = video.currentSrc; L.energy = 0; L.seconds = 0; }
+                const an = video.__zentubeAnalyser;
+                an.getFloatTimeDomainData(L.buf);
+                let sum = 0;
+                for (let i = 0; i < L.buf.length; i++) sum += L.buf[i] * L.buf[i];
+                // 要素の音量は測る前にかかっているので、その分を戻して「動画そのものの大きさ」にする
+                const ms = sum / L.buf.length / (video.volume * video.volume);
+                if (!(ms > 1e-6)) return; // 無音に近い部分は数えない
+                // 最初の数秒は早く、その後はゆっくり（曲の盛り上がりで音量が上下しないように）
+                L.seconds += 0.25;
+                const win = L.seconds < 6 ? 2 : (L.seconds < 30 ? 8 : 20);
+                const a = 0.25 / win;
+                L.energy = L.energy > 0 ? L.energy * (1 - a) + ms * a : ms;
+                const db = 10 * Math.log10(L.energy);
+                const adj = Math.max(LOUD_MAX_CUT_DB, Math.min(LOUD_MAX_BOOST_DB, LOUD_TARGET_DB - db));
+                const g = Math.pow(10, adj / 20);
+                if (video.__zentubeLevelByVolume) {
+                    // 音量（volume）は 1 より上げられないので、下げる方向だけ合わせる
+                    const target = Math.min(1, g);
+                    const cur = video.__zentubeLevelFactor || 1;
+                    video.__zentubeLevelFactor = cur + (target - cur) * (L.seconds < 6 ? 0.35 : 0.08);
+                    applyWantedVolume(video);
+                    video.__zentubeLoudDb = 20 * Math.log10(video.__zentubeLevelFactor);
+                    return;
+                }
+                try { video.__zentubeLevelNode.gain.setTargetAtTime(g, video.__zentubeAudioCtx.currentTime, L.seconds < 6 ? 0.4 : 1.5); } catch {}
+                video.__zentubeLoudDb = adj;
             }
 
             // 動画広告の自動スキップ＆高速早送り
@@ -924,8 +1057,23 @@ public static class ZenPlayerScript
             }
 
             // 動画・音源の再生速度・ループ・ABリピート・音声エフェクトの同期
+            // いま鳴っているメディア。独自プレイヤーの中では本編の動画（無ければ再生された audio）
+            function currentMedia() {
+                if (inPrismil) return pickMainVideo() || pickPlayedAudio();
+                return document.querySelector('video, audio') || pickPlayedAudio();
+            }
+
+            function pickPlayedAudio() {
+                let best = null;
+                for (const m of prismilPlayedMedia) {
+                    if (!(m instanceof HTMLMediaElement) || m.tagName === 'VIDEO') continue;
+                    if (!best || (!m.paused && best.paused)) best = m;
+                }
+                return best;
+            }
+
             function syncVideoSettings() {
-                const video = document.querySelector('video, audio');
+                const video = currentMedia();
                 if (!video) return;
 
                 if (!wasAdPlaying && Math.abs(video.playbackRate - window.__zentubePlaybackRate) > 0.01) {
@@ -946,6 +1094,8 @@ public static class ZenPlayerScript
                 }
 
                 setupAudioChain(video);
+                measureLoudness(video);
+                if (video.__zentubeLevelByVolume) applyWantedVolume(video);
 
                 if (!video.__zentubeEndedBound) {
                     video.__zentubeEndedBound = true;
@@ -1096,6 +1246,12 @@ public static class ZenPlayerScript
                 syncVideoSettings();
             };
 
+            // サイトごとの音の大きさの差をそろえる（ON/OFF）
+            window.setZenTubeLoudness = function(on) {
+                window.__zentubeNormalize = Boolean(on);
+                syncVideoSettings();
+            };
+
             window.stepZenTubeABRepeat = function() {
                 const video = document.querySelector('video, audio');
                 if (!video) return;
@@ -1182,7 +1338,7 @@ public static class ZenPlayerScript
             }
 
             function runPrismilCommand(d) {
-                const v = pickMainVideo();
+                const v = pickMainVideo() || pickPlayedAudio();
                 if (!v) { forwardToChildren(d); return; }
                 const num = Number(d.value);
                 switch (d.op) {
@@ -1199,11 +1355,17 @@ public static class ZenPlayerScript
                         }
                         break;
                     case 'volume':
-                        if (isFinite(num)) { v.volume = Math.max(0, Math.min(1, num)); v.muted = v.volume === 0; }
+                        if (isFinite(num)) {
+                            v.__zentubeWantVol = Math.max(0, Math.min(1, num));
+                            v.volume = Math.max(0, Math.min(1, v.__zentubeWantVol * levelFactor(v)));
+                        }
                         break;
                     case 'toggleMute':
                         v.muted = !v.muted;
                         if (!v.muted && v.volume === 0) v.volume = 0.5;
+                        break;
+                    case 'mute':
+                        v.muted = Boolean(d.value);
                         break;
                 }
             }
@@ -1254,16 +1416,29 @@ public static class ZenPlayerScript
                 if (root) root.classList.toggle('prismil-has-video', prismilHasVideo);
                 if (prismilHasVideo) tagOverlayCanvases(v);
 
-                if (!v && !err) return;
+                // 動画が無く音声だけのサイト（SoundCloud）は、音量と再生位置だけを知らせる（画面はサイトのまま）
+                if (!v && !err) {
+                    const au = pickPlayedAudio();
+                    if (!au || au.readyState < 1) return;
+                    try {
+                        window.parent.postMessage({
+                            __prismil: 'state', hasVideo: false, audio: true, error: false,
+                            t: au.currentTime, d: au.duration, paused: au.paused,
+                            vol: reportedVolume(au), muted: au.muted, level: au.__zentubeLoudDb
+                        }, '*');
+                    } catch {}
+                    return;
+                }
                 try {
                     window.parent.postMessage({
                         __prismil: 'state',
                         hasVideo: prismilHasVideo,
+                        level: v ? v.__zentubeLoudDb : undefined,
                         error: err,
                         t: v ? v.currentTime : 0,
                         d: v ? v.duration : 0,
                         paused: v ? v.paused : true,
-                        vol: v ? v.volume : 1,
+                        vol: v ? reportedVolume(v) : 1,
                         muted: v ? v.muted : false
                     }, '*');
                 } catch {}

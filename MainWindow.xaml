@@ -4,18 +4,28 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:svc="clr-namespace:ZenTube.Services"
         Title="Prismil" Icon="Assets/prismil.ico" Height="880" Width="1440" MinWidth="820" MinHeight="520"
-        Background="#0D0F14" Foreground="#F1F5F9"
+        Background="#0D111B" Foreground="#F1F5F9" UseLayoutRounding="True" WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI Variable Text, Yu Gothic UI, Meiryo UI">
 
     <Window.Resources>
+        <Style x:Key="VisibleKeyboardFocus" TargetType="Control">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border BorderBrush="#A5B4FC" BorderThickness="2" CornerRadius="8" Margin="1"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <!-- サムネイルを表示サイズに縮めて読み込む -->
         <svc:ThumbnailConverter x:Key="ThumbConverter"/>
         <!-- 左ナビゲーションのメニューボタン -->
         <Style x:Key="NavMenuButton" TargetType="RadioButton">
             <Setter Property="Foreground" Value="#94A3B8"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Margin" Value="10,1.5"/>
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Margin" Value="10,3"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource VisibleKeyboardFocus}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -45,7 +55,7 @@
                                 <Setter Property="Foreground" Value="#E2E8F0"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1FFFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#343965"/>
                                 <Setter TargetName="Badge" Property="Background" Value="#4F46E5"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -58,6 +68,7 @@
 
         <!-- 「サイト別に見る」のボタン -->
         <Style x:Key="SiteFilterRadio" TargetType="RadioButton">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource VisibleKeyboardFocus}"/>
             <Setter Property="Foreground" Value="#94A3B8"/>
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Height" Value="32"/>
@@ -91,6 +102,8 @@
 
         <!-- トピックチップボタン -->
         <Style x:Key="TopicChipButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource VisibleKeyboardFocus}"/>
+            <Setter Property="MinHeight" Value="34"/>
             <Setter Property="Background" Value="#0FFFFFFF"/>
             <Setter Property="Foreground" Value="#CBD5E1"/>
             <Setter Property="BorderBrush" Value="#14FFFFFF"/>
@@ -122,6 +135,8 @@
 
         <!-- 汎用アクションボタン -->
         <Style x:Key="ActionBtn" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource VisibleKeyboardFocus}"/>
+            <Setter Property="MinHeight" Value="32"/>
             <Setter Property="Background" Value="#12FFFFFF"/>
             <Setter Property="Foreground" Value="#E2E8F0"/>
             <Setter Property="BorderBrush" Value="#14FFFFFF"/>
@@ -178,6 +193,9 @@
         </Style>
         <!-- アイコンだけの控えめなボタン（枠なし・ホバーで薄く光る） -->
         <Style x:Key="IconBtn" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource VisibleKeyboardFocus}"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="MinWidth" Value="30"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#CBD5E1"/>
             <Setter Property="FontSize" Value="13"/>
@@ -288,7 +306,7 @@
         <!-- ==================== 左サイドバー ==================== -->
         <!-- 開閉アニメーション用：列の幅が縮むと、中身が左へスライドして隠れる -->
         <Grid Grid.Column="0" ClipToBounds="True">
-        <Border Width="236" HorizontalAlignment="Right" Background="#1A000000" BorderBrush="#14FFFFFF" BorderThickness="0,0,1,0">
+        <Border Width="236" HorizontalAlignment="Right" Background="#E6121723" BorderBrush="#263044" BorderThickness="0,0,1,0">
             <DockPanel LastChildFill="True">
                 <!-- ロゴヘッダー -->
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="18,16,14,12">
@@ -326,8 +344,8 @@
                     <!-- ローカルプライバシー保護ステータス（ログイン不要・PC内完結） -->
                     <Border Background="#0AFFFFFF" BorderBrush="#1AFFFFFF" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,6">
                         <StackPanel>
-                            <TextBlock Text="🔒 ログイン不要・ローカル完結" Foreground="#34D399" FontSize="10.5" FontWeight="Bold"/>
-                            <TextBlock Text="チャンネル登録・履歴はこのPCのみに保存（消去などは ⚙ 設定 から）" Foreground="#9AA4B5" FontSize="9.5"
+                            <TextBlock Text="ライブラリはこのPCに保存" Foreground="#9EBBAD" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Text="保存データの管理は「設定」から" Foreground="#9AA4B5" FontSize="10.5"
                                        Margin="0,2,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
@@ -338,18 +356,21 @@
                 <!-- 中央スクロール領域（ナビ・マイプレイリスト・サイト別に見る） -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="DISCOVER" Foreground="#7C8798" FontSize="10.5"
+                        <TextBlock Text="見つける" Foreground="#A0AEC0" FontSize="11"
                                    FontWeight="Bold" Margin="20,4,0,2"/>
-                        <RadioButton x:Name="NavHome" Content="🔥  トレンド・おすすめ"
+                        <RadioButton x:Name="NavHome" Content="トレンド・おすすめ"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavMusicMode" Content="🎧  Musicモード (音楽特化)"
+                        <RadioButton x:Name="NavShorts" Content="ショート動画"
+                                     ToolTip="短い動画だけを見る。再生中は ↑ ↓ キーで前後の動画へ"
+                                     Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
+                        <RadioButton x:Name="NavMusicMode" Content="音楽・ラジオ"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
                         <RadioButton x:Name="NavSubscriptionsFeed" Content="登録チャンネル新着"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavSearch" Content="🔍  横断検索結果"
+                        <RadioButton x:Name="NavSearch" Content="検索結果"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
 
-                        <TextBlock Text="MY LIBRARY (このPCのみ)" Foreground="#7C8798" FontSize="10.5"
+                        <TextBlock Text="マイライブラリ" Foreground="#A0AEC0" FontSize="11"
                                    FontWeight="Bold" Margin="20,12,0,2"/>
                         <RadioButton x:Name="NavFavorites" Content="♥  お気に入り"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
@@ -363,7 +384,7 @@
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
 
                         <!-- ローカル登録チャンネル一覧 -->
-                        <TextBlock Text="SUBSCRIPTIONS (登録チャンネル)" Foreground="#7C8798" FontSize="10.5"
+                        <TextBlock Text="登録チャンネル" Foreground="#A0AEC0" FontSize="11"
                                    FontWeight="Bold" Margin="20,12,0,2"/>
                         <ItemsControl x:Name="SubscriptionsNavControl">
                             <ItemsControl.ItemTemplate>
@@ -377,7 +398,7 @@
                         </ItemsControl>
 
                         <!-- カスタムプレイリスト一覧 -->
-                        <TextBlock Text="CUSTOM PLAYLISTS" Foreground="#7C8798" FontSize="10.5"
+                        <TextBlock Text="プレイリスト" Foreground="#A0AEC0" FontSize="11"
                                    FontWeight="Bold" Margin="20,12,0,4"/>
                         <ItemsControl x:Name="PlaylistsNavControl">
                             <ItemsControl.ItemTemplate>
@@ -485,6 +506,8 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             <Grid Grid.Column="1">
                                 <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0"
+                                         AutomationProperties.Name="動画名・投稿者名・URLで検索"
+                                         ToolTip="動画名・投稿者名・URLを入力して Enter（Ctrl+L で検索欄へ）"
                                          Foreground="White" CaretBrush="#818CF8" FontSize="13"
                                          VerticalContentAlignment="Center"
                                          KeyDown="SearchBox_KeyDown"
@@ -575,17 +598,16 @@
                     </Grid.RowDefinitions>
 
                     <!-- セクションタイトル＆クイックトピックチップ -->
-                    <StackPanel Grid.Row="0" Margin="24,16,24,8">
-                        <DockPanel Margin="0,0,0,10">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock x:Name="ViewHeaderTitle" Text="🔥 3サイト横断トレンド"
-                                           Foreground="White" FontSize="20" FontWeight="Bold"/>
-                                <Border Background="#14FFFFFF" CornerRadius="10" Padding="10,3" Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock x:Name="ViewHeaderCount" Text="0 件" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
-                                </Border>
-                            </StackPanel>
-
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Grid.Row="0" Margin="24,22,24,12">
+                        <StackPanel Margin="0,0,0,10">
+                            <DockPanel VerticalAlignment="Center">
+                                <TextBlock x:Name="ViewHeaderCount" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center"
+                                           Foreground="#94A3B8" FontSize="12"/>
+                                <TextBlock x:Name="ViewHeaderTitle" Text="トレンド・おすすめ"
+                                           Foreground="White" FontSize="23" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                            </DockPanel>
+                            <WrapPanel Margin="0,10,0,0">
                                 <!-- ランダム1本即再生ボタン -->
                                 <Button Content="おまかせ再生" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,8,0" Click="PlayRandomOne_Click"
@@ -604,6 +626,8 @@
                                 <Button x:Name="BtnClearHistory" Content="履歴をすべて消去" Style="{StaticResource ActionBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="ClearHistory_Click"/>
                                 <Button Content="⟳ 更新" Style="{StaticResource ActionBtn}" Click="RefreshFeed_Click"/>
+                                <Button x:Name="BtnShowLatestDiscover" Content="最新の一覧を表示" Style="{StaticResource ActionBtn}"
+                                        Visibility="Collapsed" Margin="8,0,0,0" Click="ShowLatestDiscover_Click"/>
                             </WrapPanel>
                         </StackPanel>
 
@@ -659,7 +683,7 @@
                         </Border>
 
                         <!-- トピックワンクリック検索チップ ＋ 最近の検索ワード履歴 -->
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ScrollViewer x:Name="DiscoverTopics" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="5サイト総合" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag=""/>
                                 <Button Content="SoundCloud 音楽" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="SoundCloud"/>
@@ -726,10 +750,25 @@
                                             <DataTemplate>
                                                 <!-- 個別動画カード -->
                                                 <Border Width="278" Margin="6,8" CornerRadius="12"
-                                                        Background="#0DFFFFFF" BorderBrush="#00000000" BorderThickness="1">
+                                                        Background="#192130" BorderThickness="1">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderBrush" Value="#2B3547"/>
+                                                            <Style.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="#818CF8"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="#A5B4FC"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <StackPanel>
                                                         <!-- サムネイル領域 (クリックで再生) -->
                                                         <Button Cursor="Hand" Click="PlayVideoCard_Click" Tag="{Binding}"
+                                                                AutomationProperties.Name="{Binding Title}" ToolTip="クリックして再生"
+                                                                FocusVisualStyle="{StaticResource VisibleKeyboardFocus}"
                                                                 Background="Transparent" BorderThickness="0" Padding="0">
                                                             <Button.Template>
                                                                 <ControlTemplate TargetType="Button">
@@ -767,6 +806,9 @@
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
                                                                         </Trigger>
+                                                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                            <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
+                                                                        </Trigger>
                                                                     </ControlTemplate.Triggers>
                                                                 </ControlTemplate>
                                                             </Button.Template>
@@ -774,9 +816,9 @@
 
                                                         <!-- テキスト＆アクション領域 -->
                                                         <StackPanel Margin="12,10,12,12">
-                                                            <TextBlock Text="{Binding Title}" Foreground="#F1F5F9" FontSize="13.5"
-                                                                       FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="38"
-                                                                       TextTrimming="CharacterEllipsis" Height="38"
+                                                            <TextBlock Text="{Binding Title}" Foreground="#F1F5F9" FontSize="14"
+                                                                       FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="44" LineHeight="21"
+                                                                       TextTrimming="CharacterEllipsis" Height="44"
                                                                        ToolTip="{Binding Title}" Cursor="Hand"
                                                                        MouseLeftButtonUp="VideoTitle_MouseLeftButtonUp" Tag="{Binding}"/>
 
@@ -832,7 +874,7 @@
                                 <StackPanel HorizontalAlignment="Center">
                                     <TextBlock x:Name="StatusTitle" Text="3サイトから動画を検索中..."
                                                Foreground="White" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="StatusSubtitle" Text="YouTube・ニコニコ動画・bilibili のデータを統合しています"
+                                    <TextBlock x:Name="StatusSubtitle" Text="有効なサイトのデータを統合しています"
                                                Foreground="#94A3B8" FontSize="12.5" Margin="0,6,0,0" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -1100,6 +1142,13 @@
                                     <StackPanel>
                                         <TextBlock Text="アンビエントライト" Style="{StaticResource SettingName}"/>
                                         <TextBlock Text="動画の色に合わせて、周りをほんのり光らせる" Style="{StaticResource SettingDesc}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <DockPanel Style="{StaticResource SettingRow}">
+                                    <CheckBox x:Name="SetNormalize" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="音量を自動でそろえる" Style="{StaticResource SettingName}"/>
+                                        <TextBlock Text="サイトや動画ごとの音の大きさの差を、聞きやすい大きさに自動で合わせる" Style="{StaticResource SettingDesc}"/>
                                     </StackPanel>
                                 </DockPanel>
                                 <DockPanel Style="{StaticResource SettingRow}">

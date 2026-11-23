@@ -47,8 +47,14 @@ public static class PrismilPlayer
         return $"https://{HostName}/player.html" +
                $"?site={item.Site.ToString().ToLowerInvariant()}" +
                $"&src={Uri.EscapeDataString(embed)}" +
-               $"&fallback={Uri.EscapeDataString(item.WatchUrl)}";
+               $"&fallback={Uri.EscapeDataString(item.WatchUrl)}" +
+               $"&vol={Math.Clamp(Volume, 0, 1).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}" +
+               $"&muted={(Muted ? 1 : 0)}";
     }
+
+    /// <summary>次に開く動画の音量（使う人が最後に選んだもの）</summary>
+    public static double Volume { get; set; } = 1.0;
+    public static bool Muted { get; set; }
 
     private static string? BuildEmbedUrl(VideoItem item)
     {
@@ -81,6 +87,9 @@ public static class PrismilPlayer
             // Dailymotion は埋め込みURLが「Forbidden」になる・広告読み込みで止まるため、今は今まで通りの表示にする
 
             case SiteType.SoundCloud:
+                // 検索結果は最初から埋め込みプレイヤーのURLになっている
+                if (item.WatchUrl.StartsWith("https://w.soundcloud.com/player/", StringComparison.OrdinalIgnoreCase))
+                    return item.WatchUrl;
                 if (!item.WatchUrl.StartsWith("https://soundcloud.com/", StringComparison.OrdinalIgnoreCase)) return null;
                 return $"https://w.soundcloud.com/player/?url={Uri.EscapeDataString(item.WatchUrl)}" +
                        "&auto_play=true&visual=true&hide_related=true&show_comments=false&show_reposts=false";
@@ -127,7 +136,11 @@ public static class PrismilPlayer
 
   #bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 14px 8px; display: none; opacity: 0;
     background: linear-gradient(to bottom, transparent, rgba(0,0,0,.82)); transition: opacity .25s; }
-  body.has-video #bar { display: block; }
+  body.has-video #bar, body.audio #bar { display: block; }
+  /* SoundCloud など音声だけの時は、サイトの画面を触れるように下のバーだけ出す（全画面ボタンは不要） */
+  body.audio:not(.has-video) #bar { opacity: 1; padding-top: 10px; background: rgba(0,0,0,.72); }
+  body.audio:not(.has-video) #btnFs { display: none; }
+  body.audio:not(.has-video) #vol { width: 84px; opacity: 1; margin: 0 6px; }
   body.show-ui #bar { opacity: 1; }
   .row { display: flex; align-items: center; gap: 6px; }
   .spacer { flex: 1; }
@@ -197,6 +210,12 @@ public static class PrismilPlayer
   const src = qs.get('src') || '';
   const fallback = qs.get('fallback') || '';
   const site = qs.get('site') || '';
+  // 使う人が選んだ音量。動画が変わってもサイトが勝手に変えても、これに合わせ直す
+  const want = {
+    vol: Math.max(0, Math.min(1, Number(qs.get('vol') ?? 1))),
+    muted: qs.get('muted') === '1'
+  };
+  if (!isFinite(want.vol)) want.vol = 1;
   const $ = (id) => document.getElementById(id);
   const frame = $('frame'), body = document.body;
 
@@ -215,7 +234,7 @@ public static class PrismilPlayer
   // 設定系は覚えておき、埋め込み側の準備ができた時（読み込み直後など）にもう一度送る
   const SETTERS = ['setZenTubeMode', 'setZenTubeAmbilight', 'setZenTubeDanmaku', 'loadZenTubeDanmakuPool',
     'setZenTubeAdBlock', 'setZenTubeBlockShorts', 'setZenTubePlaybackRate', 'setZenTubeLoop',
-    'setZenTubeVideoFx', 'setZenTubeAudioProfile'];
+    'setZenTubeVideoFx', 'setZenTubeAudioProfile', 'setZenTubeLoudness'];
   const ACTIONS = ['stepZenTubeABRepeat', 'clearZenTubeABRepeat', 'pauseZenTubeVideo', 'toggleZenTubePlayPause'];
   const cache = new Map();
   let activeWin = null;   // 動画を持っている埋め込みフレーム
@@ -236,6 +255,25 @@ public static class PrismilPlayer
   const cmd = (op, value) => post(activeWin || frame.contentWindow, { __prismil: 'cmd', op, value });
   // アプリのコメント一覧から、コメントの場面へ移動する
   window.prismilSeekTo = (sec) => { if (isFinite(sec)) cmd('seek', sec); };
+
+  // ---- 音量 ----
+  function setVolume(v, muted) {
+    want.vol = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+    want.muted = muted === undefined ? want.vol === 0 : !!muted;
+    st.vol = want.vol; st.muted = want.muted;
+    cmd('volume', want.vol); cmd('mute', want.muted);
+    render();
+    toHost('volume:' + want.vol + ';' + (want.muted ? 1 : 0));
+  }
+  window.prismilSetVolume = (v, muted) => setVolume(Number(v), !!muted);
+  let lastEnforce = 0;
+  function enforceVolume(d) {
+    if (Math.abs(d.vol - want.vol) < 0.011 && !!d.muted === want.muted) return;
+    const now = performance.now();
+    if (now - lastEnforce < 300) return;
+    lastEnforce = now;
+    cmd('volume', want.vol); cmd('mute', want.muted);
+  }
   // ---- 状態 ----
   let st = { t: 0, d: 0, paused: true, vol: 1, muted: false };
   let hasVideo = false;
@@ -255,9 +293,18 @@ public static class PrismilPlayer
         break;
       case 'state':
         if (d.error) { setProblem(true); hasVideo = false; body.classList.remove('has-video'); return; }
+        if (d.audio && !hasVideo) {
+          activeWin = e.source;
+          enforceVolume(d);
+          st = Object.assign({}, d, { vol: want.vol, muted: want.muted });
+          if (!body.classList.contains('audio')) { body.classList.add('audio'); $('loading').style.display = 'none'; }
+          render();
+          return;
+        }
         if (!d.hasVideo) return;
         activeWin = e.source;
-        st = d;
+        enforceVolume(d);
+        st = Object.assign({}, d, { vol: want.vol, muted: want.muted });
         if (!hasVideo) { hasVideo = true; body.classList.add('has-video'); setProblem(false); }
         render();
         break;
@@ -337,8 +384,11 @@ public static class PrismilPlayer
   });
 
   $('btnPlay').addEventListener('click', togglePlay);
-  $('btnMute').addEventListener('click', () => cmd('toggleMute'));
-  $('vol').addEventListener('input', (e) => cmd('volume', Number(e.target.value)));
+  $('btnMute').addEventListener('click', () => {
+    if (want.muted || want.vol === 0) setVolume(want.vol === 0 ? 0.5 : want.vol, false);
+    else setVolume(want.vol, true);
+  });
+  $('vol').addEventListener('input', (e) => setVolume(Number(e.target.value)));
   $('btnFs').addEventListener('click', toggleFs);
   $('btnFs').innerHTML = ICON.fs;
   $('btnPlay').innerHTML = ICON.play;
@@ -353,8 +403,8 @@ public static class PrismilPlayer
   $('shield').addEventListener('dblclick', () => { clearTimeout(clickTimer); toggleFs(); });
   $('shield').addEventListener('wheel', (e) => {
     e.preventDefault();
-    const v = Math.max(0, Math.min(1, (st.muted ? 0 : st.vol) + (e.deltaY < 0 ? 0.05 : -0.05)));
-    st.vol = v; st.muted = false; render(); cmd('volume', v);
+    const v = Math.max(0, Math.min(1, (want.muted ? 0 : want.vol) + (e.deltaY < 0 ? 0.05 : -0.05)));
+    setVolume(v);
   }, { passive: false });
 
   // シークバー
@@ -383,14 +433,14 @@ public static class PrismilPlayer
 
   // キーボード
   document.addEventListener('keydown', (e) => {
-    if (!hasVideo || e.ctrlKey || e.altKey || e.metaKey) return;
+    if ((!hasVideo && !body.classList.contains('audio')) || e.ctrlKey || e.altKey || e.metaKey) return;
     const k = e.key.toLowerCase();
     if (k === ' ' || k === 'k') { togglePlay(); }
     else if (k === 'arrowleft' || k === 'j') { cmd('seekBy', k === 'j' ? -10 : -5); }
     else if (k === 'arrowright' || k === 'l') { cmd('seekBy', k === 'l' ? 10 : 5); }
-    else if (k === 'arrowup') { cmd('volume', Math.min(1, (st.muted ? 0 : st.vol) + 0.05)); }
-    else if (k === 'arrowdown') { cmd('volume', Math.max(0, (st.muted ? 0 : st.vol) - 0.05)); }
-    else if (k === 'm') { cmd('toggleMute'); }
+    else if (k === 'arrowup') { setVolume((want.muted ? 0 : want.vol) + 0.05); }
+    else if (k === 'arrowdown') { setVolume((want.muted ? 0 : want.vol) - 0.05); }
+    else if (k === 'm') { $('btnMute').click(); }
     else if (k === 'f') { toggleFs(); }
     else if (k === 't') { toHost('theater_toggle'); }
     else if (k === 'escape' && !document.fullscreenElement) { toHost('theater_exit'); }
