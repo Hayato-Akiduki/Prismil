@@ -100,6 +100,7 @@ public partial class MainWindow : Window
     /// <summary>サイト別おすすめの続きを読むための目印</summary>
     private VideoSearchService.SiteSearchCursor? _homeCursor;
     private int _homeGeneration;
+    private int _statusGeneration;
     private bool _isHomeLoading;
     /// <summary>ボタン側でホームを読み込み直すとき、サイト切り替えによる自動の読み込み直しを止める</summary>
     private bool _suppressHomeAutoReload;
@@ -676,12 +677,13 @@ public partial class MainWindow : Window
         if (NavHome.IsChecked == true) _scrollCardsToTopOnNextSet = true;
 
         _isHomeLoading = true;
+        int statusGeneration;
         List<VideoItem> items;
         try
         {
             if (site is SiteType s)
             {
-                ShowLoadingOverlay(
+                statusGeneration = ShowLoadingOverlay(
                     string.IsNullOrEmpty(_lastTopicKeyword)
                         ? $"{SiteLabel(s)} のおすすめを取得中..."
                         : $"「{_lastTopicKeyword}」の動画を{SiteLabel(s)}から取得中...",
@@ -691,7 +693,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowLoadingOverlay(
+                statusGeneration = ShowLoadingOverlay(
                     string.IsNullOrEmpty(_lastTopicKeyword)
                         ? "5サイトのトレンド・音楽・配信を取得中..."
                         : $"「{_lastTopicKeyword}」の動画を全サイトから取得中...",
@@ -720,7 +722,7 @@ public partial class MainWindow : Window
         _libraryService.SyncCollectionFlags(items);
         _discoverItems = items;
 
-        HideLoadingOverlay();
+        if (statusGeneration == _statusGeneration) HideLoadingOverlay();
         if (NavHome.IsChecked == true)
             RefreshDisplayedCards();
     }
@@ -3415,17 +3417,19 @@ public partial class MainWindow : Window
     // =========================================================================
     // オーバーレイ・全画面・ショートカット
     // =========================================================================
-    private void ShowLoadingOverlay(string title, string subtitle)
+    private int ShowLoadingOverlay(string title, string subtitle)
     {
         StatusOverlay.IsHitTestVisible = true;
         _isLoading = true;
         StatusTitle.Text = title;
         StatusSubtitle.Text = subtitle;
         StatusOverlay.Visibility = Visibility.Visible;
+        return ++_statusGeneration;
     }
 
     private void ShowEmptyState(string title, string subtitle)
     {
+        _statusGeneration++;
         StatusOverlay.IsHitTestVisible = true;
         StatusTitle.Text = title;
         StatusSubtitle.Text = subtitle;
