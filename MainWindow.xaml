@@ -604,26 +604,19 @@
                                 <Button x:Name="BtnClearHistory" Content="🗑 履歴をすべて消去" Style="{StaticResource ActionBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="ClearHistory_Click"/>
                                 <Button Content="⟳ 更新" Style="{StaticResource ActionBtn}" Click="RefreshFeed_Click"/>
-                            </StackPanel>
-                        </DockPanel>
+                            </WrapPanel>
+                        </StackPanel>
 
                         <!-- 🎧 Musicモード専用：ジャンル＆ムード・ステーションバー + ラジオ＆Podcastステーション -->
                         <Border x:Name="MusicStationBar" Visibility="Collapsed" CornerRadius="12" Padding="14,12" Margin="0,0,0,10"
                                 Background="#0DFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1">
                             <StackPanel>
-                                <DockPanel Margin="0,0,0,8">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="🎧 ZEN MUSIC &amp; RADIO HUB" Foreground="#F472B6" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                                        <TextBlock Text=" — 音楽・作業用BGM・24時間ネットラジオ生放送・人気Podcast番組を1クリック選曲"
-                                                   Foreground="#CBD5E1" FontSize="11.5" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <Button x:Name="BtnMusicBgListenToggle" Content="🎧 クリック時は下部バーでBGM再生: ON"
-                                                Style="{StaticResource ActionBtn}"
-                                                Padding="10,3" FontSize="11" Click="MusicBgListenToggle_Click"
-                                                ToolTip="ON: 曲・ラジオ・Podcastをクリックしても一覧画面のまま下部プレイヤーバーで再生を続けます / OFF: クリック時にプレイヤー画面を開きます"/>
-                                    </StackPanel>
-                                </DockPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+                                    <Button x:Name="BtnMusicBgListenToggle" Content="🎧 クリック時は下部バーでBGM再生: ON"
+                                            Style="{StaticResource ActionBtn}"
+                                            Padding="10,3" FontSize="11" Click="MusicBgListenToggle_Click"
+                                            ToolTip="ON: 曲・ラジオ・Podcastをクリックしても一覧画面のまま下部プレイヤーバーで再生を続けます / OFF: クリック時にプレイヤー画面を開きます"/>
+                                </StackPanel>
 
                                 <!-- 1段目：音楽＆BGMステーション -->
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,6">
