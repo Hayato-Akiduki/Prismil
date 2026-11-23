@@ -307,7 +307,7 @@
                             CornerRadius="10" Padding="10" Margin="0,0,0,8" Visibility="Collapsed">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,4">
-                                <TextBlock Text="🎵 再生中" Foreground="#818CF8" FontSize="11" FontWeight="Bold"/>
+                                <TextBlock Text="再生中" Foreground="#818CF8" FontSize="11" FontWeight="Bold"/>
                                 <Button Content="✕" DockPanel.Dock="Right" HorizontalAlignment="Right"
                                         Background="Transparent" BorderThickness="0" Foreground="#94A3B8"
                                         Cursor="Hand" Click="StopPlayback_Click" ToolTip="再生を停止"/>
@@ -315,9 +315,9 @@
                             <TextBlock x:Name="MiniNowPlayingTitle" Text="" Foreground="White" FontSize="11.5"
                                        TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
                             <UniformGrid Columns="2">
-                                <Button Content="🎬 プレイヤー" Style="{StaticResource PrimaryBtn}"
+                                <Button Content="プレイヤー" Style="{StaticResource PrimaryBtn}"
                                         Margin="0,0,3,0" Padding="4,4" FontSize="11" Click="SwitchToPlayer_Click"/>
-                                <Button Content="🗗 ミニ窓化" Style="{StaticResource ActionBtn}"
+                                <Button Content="ミニ窓化" Style="{StaticResource ActionBtn}"
                                         Margin="3,0,0,0" Padding="4,4" FontSize="11" Click="MiniPlayerButton_Click"/>
                             </UniformGrid>
                         </StackPanel>
@@ -344,7 +344,7 @@
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
                         <RadioButton x:Name="NavMusicMode" Content="🎧  Musicモード (音楽特化)"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavSubscriptionsFeed" Content="📡  登録チャンネル新着"
+                        <RadioButton x:Name="NavSubscriptionsFeed" Content="登録チャンネル新着"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
                         <RadioButton x:Name="NavSearch" Content="🔍  横断検索結果"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
@@ -353,13 +353,13 @@
                                    FontWeight="Bold" Margin="20,12,0,2"/>
                         <RadioButton x:Name="NavFavorites" Content="♥  お気に入り"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavWatchLater" Content="🕒  後で見る"
+                        <RadioButton x:Name="NavWatchLater" Content="後で見る"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavHistory" Content="📜  視聴履歴"
+                        <RadioButton x:Name="NavHistory" Content="視聴履歴"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavStats" Content="📊  視聴統計・分析"
+                        <RadioButton x:Name="NavStats" Content="視聴統計・分析"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
-                        <RadioButton x:Name="NavSettings" Content="⚙  設定"
+                        <RadioButton x:Name="NavSettings" Content="設定"
                                      Style="{StaticResource NavMenuButton}" GroupName="MainNav" Checked="MainNav_Checked"/>
 
                         <!-- ローカル登録チャンネル一覧 -->
@@ -413,7 +413,7 @@
                         </Border>
 
                         <!-- サイト別に見る（選んだサイトの検索結果・おすすめだけを表示） -->
-                        <TextBlock Text="🌐 サイト別に見る" Foreground="#AEB8C8" FontSize="12"
+                        <TextBlock Text="サイト別に見る" Foreground="#AEB8C8" FontSize="12"
                                    FontWeight="Bold" Margin="20,14,0,0"/>
                         <TextBlock Text="サイトを選ぶと、そのサイトの動画を見るモードになります（ABEMA はここでだけ表示）" Foreground="#7C8798" FontSize="10.5"
                                    TextWrapping="Wrap" Margin="20,2,12,4"/>
@@ -515,7 +515,7 @@
                             <ComboBoxItem Content="動画が短い順"/>
                         </ComboBox>
 
-                        <Button x:Name="BtnToggleViewMode" Content="🎬 プレイヤー" Style="{StaticResource ActionBtn}"
+                        <Button x:Name="BtnToggleViewMode" Content="プレイヤー" Style="{StaticResource ActionBtn}"
                                 Height="32" Margin="0,0,6,0" Click="ToggleViewMode_Click" ToolTip="カード一覧とプレイヤー画面を切り替え"/>
 
                         <Button x:Name="BtnMoreMenu" Content="⋯" Style="{StaticResource IconBtn}"
@@ -529,14 +529,14 @@
                             <Border Width="260" Background="#FF1C1F27" BorderBrush="#1AFFFFFF" BorderThickness="1"
                                     CornerRadius="10" Padding="6">
                                 <StackPanel ButtonBase.Click="MoreMenuItem_Click">
-                                    <Button x:Name="BtnMusicMode" Content="🎧 Musicモード" Style="{StaticResource MenuRowBtn}"
+                                    <Button x:Name="BtnMusicMode" Content="Musicモード" Style="{StaticResource MenuRowBtn}"
                                             Click="MusicModeButton_Click"
                                             ToolTip="音楽専用ステーション＆バックグラウンド連続再生モードへ切替"/>
-                                    <Button x:Name="BtnGacha" Content="🎲 動画ガチャ" Style="{StaticResource MenuRowBtn}"
+                                    <Button x:Name="BtnGacha" Content="動画ガチャ" Style="{StaticResource MenuRowBtn}"
                                             Click="VideoGacha_Click"
                                             ToolTip="5サイトからランダムなテーマで面白い動画・音楽・配信を10連抽選して発掘！"/>
 
-                                    <Button x:Name="BtnOpenSettings" Content="⚙ 設定" Style="{StaticResource MenuRowBtn}"
+                                    <Button x:Name="BtnOpenSettings" Content="設定" Style="{StaticResource MenuRowBtn}"
                                             Click="OpenSettings_Click"
                                             ToolTip="再生・映像と音・一覧・広告・データなどの細かい設定"/>
 
@@ -555,7 +555,7 @@
                                             <ComboBoxItem Content="60分後に停止" Tag="60"/>
                                             <ComboBoxItem Content="90分後に停止" Tag="90"/>
                                         </ComboBox>
-                                        <TextBlock Text="🌙 スリープタイマー" Foreground="#E2E8F0" FontSize="12.5" VerticalAlignment="Center"/>
+                                        <TextBlock Text="スリープタイマー" Foreground="#E2E8F0" FontSize="12.5" VerticalAlignment="Center"/>
                                     </DockPanel>
                                 </StackPanel>
                             </Border>
@@ -587,21 +587,21 @@
 
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                                 <!-- ランダム1本即再生ボタン -->
-                                <Button Content="🎯 おまかせ再生" Style="{StaticResource ActionBtn}"
+                                <Button Content="おまかせ再生" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,8,0" Click="PlayRandomOne_Click"
                                         ToolTip="現在の一覧からランダムに1本選んですぐ再生します"/>
 
                                 <!-- 登録チャンネル個別表示時の解除ボタン -->
-                                <Button x:Name="BtnUnsubscribeChannel" Content="★ チャンネル登録を解除" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnUnsubscribeChannel" Content="チャンネル登録を解除" Style="{StaticResource ActionBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="UnsubscribeCurrentChannel_Click"/>
 
                                 <!-- カスタムプレイリスト表示時専用ボタン -->
                                 <Button x:Name="BtnPlayAllPlaylist" Content="▶ このリストを連続再生" Style="{StaticResource PrimaryBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="PlayAllPlaylist_Click"/>
-                                <Button x:Name="BtnDeletePlaylist" Content="🗑 リストを削除" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnDeletePlaylist" Content="リストを削除" Style="{StaticResource ActionBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="DeleteCurrentPlaylist_Click"/>
 
-                                <Button x:Name="BtnClearHistory" Content="🗑 履歴をすべて消去" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnClearHistory" Content="履歴をすべて消去" Style="{StaticResource ActionBtn}"
                                         Visibility="Collapsed" Margin="0,0,8,0" Click="ClearHistory_Click"/>
                                 <Button Content="⟳ 更新" Style="{StaticResource ActionBtn}" Click="RefreshFeed_Click"/>
                             </WrapPanel>
@@ -612,7 +612,7 @@
                                 Background="#0DFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
-                                    <Button x:Name="BtnMusicBgListenToggle" Content="🎧 クリック時は下部バーでBGM再生: ON"
+                                    <Button x:Name="BtnMusicBgListenToggle" Content="クリック時は下部バーでBGM再生: ON"
                                             Style="{StaticResource ActionBtn}"
                                             Padding="10,3" FontSize="11" Click="MusicBgListenToggle_Click"
                                             ToolTip="ON: 曲・ラジオ・Podcastをクリックしても一覧画面のまま下部プレイヤーバーで再生を続けます / OFF: クリック時にプレイヤー画面を開きます"/>
@@ -621,37 +621,37 @@
                                 <!-- 1段目：音楽＆BGMステーション -->
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🎵 音楽:" Foreground="#F472B6" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <Button Content="🔥 J-POP / 邦楽ヒット" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="YOASOBI 米津玄師 Ado Official MV J-POP"/>
-                                        <Button Content="🎤 ボカロ / 歌ってみた" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="VOCALOID 初音ミク ボカロ 歌ってみた 名曲"/>
-                                        <Button Content="☁ SoundCloud トレンド" Style="{StaticResource TopicChipButton}" x:Name="SoundCloudStation" Click="MusicStationSoundCloud_Click" Tag="J-POP Anime Vocaloid Future Bass Remix"/>
-                                        <Button Content="🎹 作業用 Lo-Fi / Chill" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="Lofi Hip Hop Chill Beats 作業用BGM 勉強用"/>
-                                        <Button Content="🎸 アニソン / ゲーム神曲" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="アニソン 神曲 ゲーム音楽 OST 主題歌"/>
-                                        <Button Content="🎧 EDM / Nightcore / Remix" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="EDM Nightcore Kawaii Future Bass Remix"/>
-                                        <Button Content="☕ カフェジャズ / ピアノ" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="カフェ ジャズ ピアノ BGM Relaxing Piano Jazz"/>
-                                        <Button Content="🌙 深夜の睡眠・環境音" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="睡眠用BGM 雨音 Ambient Sleep Music"/>
+                                        <TextBlock Text="音楽:" Foreground="#F472B6" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Button Content="J-POP / 邦楽ヒット" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="YOASOBI 米津玄師 Ado Official MV J-POP"/>
+                                        <Button Content="ボカロ / 歌ってみた" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="VOCALOID 初音ミク ボカロ 歌ってみた 名曲"/>
+                                        <Button Content="SoundCloud トレンド" Style="{StaticResource TopicChipButton}" x:Name="SoundCloudStation" Click="MusicStationSoundCloud_Click" Tag="J-POP Anime Vocaloid Future Bass Remix"/>
+                                        <Button Content="作業用 Lo-Fi / Chill" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="Lofi Hip Hop Chill Beats 作業用BGM 勉強用"/>
+                                        <Button Content="アニソン / ゲーム神曲" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="アニソン 神曲 ゲーム音楽 OST 主題歌"/>
+                                        <Button Content="EDM / Nightcore / Remix" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="EDM Nightcore Kawaii Future Bass Remix"/>
+                                        <Button Content="カフェジャズ / ピアノ" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="カフェ ジャズ ピアノ BGM Relaxing Piano Jazz"/>
+                                        <Button Content="深夜の睡眠・環境音" Style="{StaticResource TopicChipButton}" Click="MusicStation_Click" Tag="睡眠用BGM 雨音 Ambient Sleep Music"/>
                                     </StackPanel>
                                 </ScrollViewer>
 
                                 <!-- 2段目：📻 ネットラジオ生放送 ＆ 🎙 ポッドキャスト番組 -->
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                     <StackPanel x:Name="BroadcastStations" Orientation="Horizontal">
-                                        <TextBlock Text="📻 ラジオ &amp; Podcast:" Foreground="#38BDF8" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                        <Button Content="🎙 人気ラジオ番組・芸人トーク" Style="{StaticResource TopicChipButton}"
+                                        <TextBlock Text="ラジオ &amp; Podcast:" Foreground="#38BDF8" FontSize="11.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Button Content="人気ラジオ番組・芸人トーク" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="podcast:ラジオショー オールナイトニッポン 芸人 ラジオ"/>
-                                        <Button Content="🎙 ニュース・経済・時事Podcast" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="ニュース・経済・時事Podcast" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="podcast:ニュース 経済 解説 新聞"/>
-                                        <Button Content="🎙 歴史・科学・教養・雑学" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="歴史・科学・教養・雑学" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="podcast:歴史 教養 科学 コテン 雑談"/>
-                                        <Button Content="🎙 英語リスニング・ITテック" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="英語リスニング・ITテック" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="podcast:英語 英会話 テクノロジー IT"/>
-                                        <Button Content="📻 日本のネットラジオ局 (JP LIVE)" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="日本のネットラジオ局 (JP LIVE)" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="radio:JP"/>
-                                        <Button Content="📻 24h Lo-Fi / Chill Radio" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="24h Lo-Fi / Chill Radio" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="radio:lofi"/>
-                                        <Button Content="📻 24h J-POP / Anime Radio" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="24h J-POP / Anime Radio" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="radio:anime"/>
-                                        <Button Content="📻 24h Jazz / Classical Radio" Style="{StaticResource TopicChipButton}"
+                                        <Button Content="24h Jazz / Classical Radio" Style="{StaticResource TopicChipButton}"
                                                 Click="MusicStation_Click" Tag="radio:jazz"/>
                                     </StackPanel>
                                 </ScrollViewer>
@@ -661,15 +661,15 @@
                         <!-- トピックワンクリック検索チップ ＋ 最近の検索ワード履歴 -->
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="🔥 5サイト総合" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag=""/>
-                                <Button Content="☁ SoundCloud 音楽" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="SoundCloud"/>
-                                <Button Content="🔴 Twitch 生配信" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Twitch"/>
-                                <Button Content="📺 ABEMA 放送中" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Abema"/>
-                                <Button Content="🎵 音楽 / 公式MV" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="Official Music Video MV"/>
-                                <Button Content="🎤 ボカロ / 歌ってみた" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="VOCALOID ボカロ 歌ってみた"/>
-                                <Button Content="🎮 ゲーム実況 / 配信" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="ゲーム実況 VALORANT Apex"/>
-                                <Button Content="🎬 アニメ / MAD" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="アニメ PV MAD"/>
-                                <Button Content="☕ 作業用BGM / Lo-Fi" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="作業用BGM Chill Lofi"/>
+                                <Button Content="5サイト総合" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag=""/>
+                                <Button Content="SoundCloud 音楽" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="SoundCloud"/>
+                                <Button Content="Twitch 生配信" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Twitch"/>
+                                <Button Content="ABEMA 放送中" Style="{StaticResource TopicChipButton}" Click="QuickSiteFilterChip_Click" Tag="Abema"/>
+                                <Button Content="音楽 / 公式MV" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="Official Music Video MV"/>
+                                <Button Content="ボカロ / 歌ってみた" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="VOCALOID ボカロ 歌ってみた"/>
+                                <Button Content="ゲーム実況 / 配信" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="ゲーム実況 VALORANT Apex"/>
+                                <Button Content="アニメ / MAD" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="アニメ PV MAD"/>
+                                <Button Content="作業用BGM / Lo-Fi" Style="{StaticResource TopicChipButton}" Click="TopicChip_Click" Tag="作業用BGM Chill Lofi"/>
 
                                 <ItemsControl x:Name="RecentSearchesControl">
                                     <ItemsControl.ItemsPanel>
@@ -846,11 +846,11 @@
                     <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch">
                         <DockPanel Margin="0,0,0,18">
                             <StackPanel>
-                                <TextBlock Text="📊 マイ視聴統計・メディア分析" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                <TextBlock Text="マイ視聴統計・メディア分析" Foreground="White" FontSize="22" FontWeight="Bold"/>
                                 <TextBlock Text="このPC内に記録された視聴履歴・お気に入り・登録チャンネルの傾向レポート"
                                            Foreground="#94A3B8" FontSize="12.5" Margin="0,4,0,0"/>
                             </StackPanel>
-                            <Button DockPanel.Dock="Right" Content="🎲 新しい動画をガチャで発掘" Style="{StaticResource PrimaryBtn}"
+                            <Button DockPanel.Dock="Right" Content="新しい動画をガチャで発掘" Style="{StaticResource PrimaryBtn}"
                                     HorizontalAlignment="Right" VerticalAlignment="Center" Padding="14,8" Click="VideoGacha_Click"/>
                         </DockPanel>
 
@@ -858,7 +858,7 @@
                         <UniformGrid Columns="4" Margin="0,0,0,20">
                             <Border Background="#0DFFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1" CornerRadius="12" Padding="18,14" Margin="0,0,8,0">
                                 <StackPanel>
-                                    <TextBlock Text="📺 総視聴動画数" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Text="総視聴動画数" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
                                     <TextBlock x:Name="StatsTotalWatchedText" Text="0 本" Foreground="White" FontSize="26" FontWeight="Bold" Margin="0,6,0,4"/>
                                     <TextBlock x:Name="StatsTotalTimeText" Text="累計動画時間: 0分" Foreground="#818CF8" FontSize="11.5"/>
                                 </StackPanel>
@@ -879,7 +879,7 @@
                             </Border>
                             <Border Background="#0DFFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1" CornerRadius="12" Padding="18,14" Margin="8,0,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="🛡 広告・追跡ブロック" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Text="広告・追跡ブロック" Foreground="#94A3B8" FontSize="12" FontWeight="SemiBold"/>
                                     <TextBlock x:Name="StatsTotalBlockedText" Text="0 件" Foreground="#34D399" FontSize="26" FontWeight="Bold" Margin="0,6,0,4"/>
                                     <TextBlock Text="今回のセッションで遮断" Foreground="#9AA4B5" FontSize="11.5"/>
                                 </StackPanel>
@@ -897,7 +897,7 @@
                             <Border Grid.Column="0" Background="#0DFFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1"
                                     CornerRadius="12" Padding="20,18" Margin="0,0,8,0">
                                 <StackPanel>
-                                    <TextBlock Text="🌐 5サイト別 利用バランス" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,14"/>
+                                    <TextBlock Text="5サイト別 利用バランス" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,14"/>
                                     <ItemsControl x:Name="SiteStatsItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -920,7 +920,7 @@
                             <Border Grid.Column="1" Background="#0DFFFFFF" BorderBrush="#0FFFFFFF" BorderThickness="1"
                                     CornerRadius="12" Padding="20,18" Margin="8,0,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="👑 よく見る推しチャンネル・投稿者 TOP 8" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                                    <TextBlock Text="よく見る推しチャンネル・投稿者 TOP 8" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
                                     <ItemsControl x:Name="TopCreatorsItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -1041,7 +1041,7 @@
                     </ScrollViewer.Resources>
 
                     <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
-                        <TextBlock Text="⚙ 設定" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                        <TextBlock Text="設定" Foreground="White" FontSize="22" FontWeight="Bold"/>
                         <TextBlock Text="変えた設定はこのPCに保存され、次に起動した時もそのまま使われます"
                                    Foreground="#94A3B8" FontSize="12.5" Margin="0,4,0,18"/>
 
@@ -1089,12 +1089,12 @@
                         <!-- 🎨 映像と音 -->
                         <Border Style="{StaticResource SettingCard}">
                             <StackPanel>
-                                <TextBlock Text="🎨 映像と音" Style="{StaticResource SettingHeader}"/>
+                                <TextBlock Text="映像と音" Style="{StaticResource SettingHeader}"/>
                                 <DockPanel Style="{StaticResource SettingRow}">
                                     <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=AmbilightCombo, Mode=TwoWay}">
-                                        <ComboBoxItem Content="🌈 標準発光"/>
-                                        <ComboBoxItem Content="✨ 強発光 (Ultra)"/>
-                                        <ComboBoxItem Content="🌙 ソフト発光"/>
+                                        <ComboBoxItem Content="標準発光"/>
+                                        <ComboBoxItem Content="強発光 (Ultra)"/>
+                                        <ComboBoxItem Content="ソフト発光"/>
                                         <ComboBoxItem Content="OFF (黒枠)"/>
                                     </ComboBox>
                                     <StackPanel>
@@ -1117,9 +1117,9 @@
                                 <DockPanel Style="{StaticResource SettingRow}">
                                     <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=AudioPresetCombo, Mode=TwoWay}">
                                         <ComboBoxItem Content="フラット (標準)"/>
-                                        <ComboBoxItem Content="🎸 重低音強化"/>
-                                        <ComboBoxItem Content="🎤 ボーカル明瞭"/>
-                                        <ComboBoxItem Content="🌙 夜間小音量用"/>
+                                        <ComboBoxItem Content="重低音強化"/>
+                                        <ComboBoxItem Content="ボーカル明瞭"/>
+                                        <ComboBoxItem Content="夜間小音量用"/>
                                     </ComboBox>
                                     <StackPanel>
                                         <TextBlock Text="音質" Style="{StaticResource SettingName}"/>
@@ -1128,10 +1128,10 @@
                                 </DockPanel>
                                 <DockPanel Style="{StaticResource SettingRow}">
                                     <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding SelectedIndex, ElementName=DanmakuStyleCombo, Mode=TwoWay}">
-                                        <ComboBoxItem Content="💬 標準"/>
-                                        <ComboBoxItem Content="🔥 大きめ・濃密"/>
-                                        <ComboBoxItem Content="🌙 控えめ・半透明"/>
-                                        <ComboBoxItem Content="🚫 OFF"/>
+                                        <ComboBoxItem Content="標準"/>
+                                        <ComboBoxItem Content="大きめ・濃密"/>
+                                        <ComboBoxItem Content="控えめ・半透明"/>
+                                        <ComboBoxItem Content="OFF"/>
                                     </ComboBox>
                                     <StackPanel>
                                         <TextBlock Text="弾幕コメント" Style="{StaticResource SettingName}"/>
@@ -1144,12 +1144,12 @@
                         <!-- 📋 一覧・検索 -->
                         <Border Style="{StaticResource SettingCard}">
                             <StackPanel>
-                                <TextBlock Text="📋 一覧・検索" Style="{StaticResource SettingHeader}"/>
+                                <TextBlock Text="一覧・検索" Style="{StaticResource SettingHeader}"/>
                                 <DockPanel Style="{StaticResource SettingRow}">
                                     <ComboBox x:Name="SetShortsCombo" DockPanel.Dock="Right" SelectionChanged="SetShortsCombo_SelectionChanged">
-                                        <ComboBoxItem Content="🚫 ショートを除外"/>
-                                        <ComboBoxItem Content="📱 ショートだけ"/>
-                                        <ComboBoxItem Content="🎬 すべて表示"/>
+                                        <ComboBoxItem Content="ショートを除外"/>
+                                        <ComboBoxItem Content="ショートだけ"/>
+                                        <ComboBoxItem Content="すべて表示"/>
                                     </ComboBox>
                                     <StackPanel>
                                         <TextBlock Text="ショート動画" Style="{StaticResource SettingName}"/>
@@ -1180,7 +1180,7 @@
                         <!-- 🛡 広告・ウィンドウ -->
                         <Border Style="{StaticResource SettingCard}">
                             <StackPanel>
-                                <TextBlock Text="🛡 広告・ウィンドウ" Style="{StaticResource SettingHeader}"/>
+                                <TextBlock Text="広告・ウィンドウ" Style="{StaticResource SettingHeader}"/>
                                 <DockPanel Style="{StaticResource SettingRow}">
                                     <CheckBox x:Name="SetAdBlock" DockPanel.Dock="Right" Style="{StaticResource SettingSwitch}" Checked="SettingSwitch_Click" Unchecked="SettingSwitch_Click"/>
                                     <StackPanel>
@@ -1201,9 +1201,9 @@
                         <!-- 🔒 プライバシーとデータ -->
                         <Border Style="{StaticResource SettingCard}">
                             <StackPanel>
-                                <TextBlock Text="🔒 プライバシーとデータ" Style="{StaticResource SettingHeader}"/>
+                                <TextBlock Text="プライバシーとデータ" Style="{StaticResource SettingHeader}"/>
                                 <DockPanel Style="{StaticResource SettingRow}">
-                                    <Button DockPanel.Dock="Right" Content="🗑 履歴を消す" Style="{StaticResource ActionBtn}"
+                                    <Button DockPanel.Dock="Right" Content="履歴を消す" Style="{StaticResource ActionBtn}"
                                             Padding="12,6" VerticalAlignment="Center" Click="ClearHistorySetting_Click"/>
                                     <StackPanel>
                                         <TextBlock Text="視聴履歴" Style="{StaticResource SettingName}"/>
@@ -1211,7 +1211,7 @@
                                     </StackPanel>
                                 </DockPanel>
                                 <DockPanel Style="{StaticResource SettingRow}">
-                                    <Button x:Name="BtnClearCookies" DockPanel.Dock="Right" Content="🧹 Cookie消去" Style="{StaticResource ActionBtn}"
+                                    <Button x:Name="BtnClearCookies" DockPanel.Dock="Right" Content="Cookie消去" Style="{StaticResource ActionBtn}"
                                             Padding="12,6" VerticalAlignment="Center" Click="ClearCookies_Click"/>
                                     <StackPanel>
                                         <TextBlock Text="Cookie・キャッシュ" Style="{StaticResource SettingName}"/>
@@ -1219,7 +1219,7 @@
                                     </StackPanel>
                                 </DockPanel>
                                 <DockPanel Style="{StaticResource SettingRow}">
-                                    <Button DockPanel.Dock="Right" Content="📂 開く" Style="{StaticResource ActionBtn}"
+                                    <Button DockPanel.Dock="Right" Content="開く" Style="{StaticResource ActionBtn}"
                                             Padding="12,6" VerticalAlignment="Center" Click="OpenLocalDataFolder_Click"/>
                                     <StackPanel>
                                         <TextBlock Text="データの保存場所" Style="{StaticResource SettingName}"/>
@@ -1261,7 +1261,7 @@
                                         Click="NextTrackButton_Click" ToolTip="次の動画を再生"/>
                                 <Button Content="🎧" Style="{StaticResource ActionBtn}" Padding="6,2" Margin="2,0"
                                         Click="AudioOnlyToggle_Click" ToolTip="BGM（音声のみ）モード切替"/>
-                                <Button Content="🗖 通常へ戻す" Style="{StaticResource PrimaryBtn}" Padding="8,2" Margin="4,0,0,0"
+                                <Button Content="通常へ戻す" Style="{StaticResource PrimaryBtn}" Padding="8,2" Margin="4,0,0,0"
                                         Click="MiniPlayerButton_Click" ToolTip="通常ウィンドウサイズに戻す (Ctrl+M / Esc)"/>
                             </StackPanel>
                             <TextBlock x:Name="MiniBarTitleText" Text="Prismil Mini" Foreground="#E2E8F0" FontSize="11.5"
@@ -1294,7 +1294,7 @@
 
                             <!-- よく使うボタンだけを並べる。それ以外は ⚙ 設定 の中 -->
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button x:Name="BtnPlayerSubscribe" Content="☆ 登録" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnPlayerSubscribe" Content="登録" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,4,0" Padding="8,5" Click="PlayerToggleSubscribe_Click"
                                         ToolTip="この動画のチャンネル/投稿者をアプリ内にローカル登録"/>
                                 <Button x:Name="BtnPlayerFavorite" Content="♡" Style="{StaticResource ActionBtn}"
@@ -1306,18 +1306,18 @@
 
                                 <Border Width="1" Height="22" Background="#26FFFFFF" Margin="6,0,10,0"/>
 
-                                <Button x:Name="BtnOpenComments" Content="💬 コメント"
+                                <Button x:Name="BtnOpenComments" Content="コメント"
                                         Style="{StaticResource PrimaryBtn}" Margin="0,0,4,0" Padding="9,5"
                                         Click="ShowCommentsPanel_Click"
                                         ToolTip="右の欄にこの動画のコメントを一覧で表示する"/>
                                 <Button x:Name="BtnToggleSideQueue" Content="📋" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,4,0" Padding="8,5" Click="ToggleSideQueue_Click" ToolTip="右の欄（次の動画・コメント）を表示/非表示"/>
-                                <Button x:Name="BtnTheaterMode" Content="🎭 シアター" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnTheaterMode" Content="シアター" Style="{StaticResource ActionBtn}"
                                         Margin="0,0,4,0" Padding="8,5" Click="TheaterModeButton_Click"
                                         ToolTip="メニューやバーを隠して、動画をウィンドウいっぱいに大きく表示 (T / Esc で戻る)"/>
                                 <Button Content="⛶" Style="{StaticResource ActionBtn}" Margin="0,0,4,0"
                                         Padding="8,5" Click="FullScreenButton_Click" ToolTip="全画面表示 (F11)"/>
-                                <Button x:Name="BtnPlayerSettings" Content="⚙ 設定" Style="{StaticResource ActionBtn}"
+                                <Button x:Name="BtnPlayerSettings" Content="設定" Style="{StaticResource ActionBtn}"
                                         Padding="9,5" Click="PlayerSettingsButton_Click"
                                         ToolTip="再生速度・ループ・音量・音質・映像効果・弾幕などの設定"/>
                             </StackPanel>
@@ -1356,51 +1356,51 @@
                                                 <ComboBoxItem Content="1.5x" Tag="1.5"/>
                                                 <ComboBoxItem Content="2.0x" Tag="2.0"/>
                                             </ComboBox>
-                                            <Button x:Name="BtnLoopToggle" Content="🔁 ループ: OFF" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnLoopToggle" Content="ループ: OFF" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="LoopToggle_Click"
                                                     ToolTip="現在の動画を無限リピート再生"/>
                                             <Button x:Name="BtnAutoNextToggle" Content="⏭ 連続: ON" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="AutoNextToggle_Click"
                                                     ToolTip="動画終了時にサイドリストの次の動画をサイトをまたいで自動再生"/>
-                                            <Button x:Name="BtnShuffleToggle" Content="🔀 シャッフル: OFF" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnShuffleToggle" Content="シャッフル: OFF" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="ShuffleToggle_Click"
                                                     ToolTip="連続再生時にサイドリストからランダムに次の動画を選択"/>
-                                            <Button x:Name="BtnABRepeat" Content="📍 A-B区間ループ: OFF" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnABRepeat" Content="A-B区間ループ: OFF" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="ABRepeatButton_Click"
                                                     ToolTip="1回目クリックでA地点(開始)、2回目でB地点(終了)を記録してその区間だけを無限ループ、3回目で解除"/>
                                         </WrapPanel>
 
                                         <!-- 表示 -->
-                                        <TextBlock Text="🖥 表示" Style="{StaticResource SettingsHeader}"/>
+                                        <TextBlock Text="表示" Style="{StaticResource SettingsHeader}"/>
                                         <WrapPanel>
-                                            <Button x:Name="BtnAudioOnlyToggle" Content="🎧 BGMモード" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnAudioOnlyToggle" Content="BGMモード" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="AudioOnlyToggle_Click"
                                                     ToolTip="映像を隠して音楽・ラジオプレイヤーとして省電力再生"/>
-                                            <Button x:Name="BtnMiniPlayer" Content="🗗 ミニ窓" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnMiniPlayer" Content="ミニ窓" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="MiniPlayerButton_Click"
                                                     ToolTip="画面の隅に置ける超小型ピクチャー・イン・ピクチャー窓に変形 (Ctrl+M)"/>
-                                            <Button x:Name="BtnScreenshot" Content="📸 スクショ" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnScreenshot" Content="スクショ" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="Screenshot_Click"
                                                     ToolTip="現在の画面をピクチャフォルダ(Pictures/ZenTube)に保存"/>
-                                            <Button x:Name="BtnMirrorToggle" Content="🪞 左右反転: OFF" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnMirrorToggle" Content="左右反転: OFF" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="MirrorToggle_Click"
                                                     ToolTip="動画の映像を左右反転（ミラー表示：ダンス練習などに最適）"/>
-                                            <Button x:Name="BtnDimToggle" Content="🕶 減光フィルター: OFF" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnDimToggle" Content="減光フィルター: OFF" Style="{StaticResource ActionBtn}"
                                                     Margin="0,0,6,6" Padding="9,5" Click="DimToggle_Click"
                                                     ToolTip="画面の眩しさを抑えるシアター減光モード"/>
                                             <TextBlock Text="アンビエント" Style="{StaticResource SettingsLabel}" Margin="2,0,6,6"/>
                                             <ComboBox x:Name="AmbilightCombo" Width="130" Height="28" VerticalContentAlignment="Center"
                                                       Margin="0,0,6,6" SelectionChanged="AudioFxCombo_SelectionChanged"
                                                       ToolTip="動画の周囲にリアルタイムで映像の色をぼかして発光させる Ambient Light 効果">
-                                                <ComboBoxItem Content="🌈 標準発光" Tag="vivid" IsSelected="True"/>
-                                                <ComboBoxItem Content="✨ 強発光 (Ultra)" Tag="ultra"/>
-                                                <ComboBoxItem Content="🌙 ソフト発光" Tag="soft"/>
+                                                <ComboBoxItem Content="標準発光" Tag="vivid" IsSelected="True"/>
+                                                <ComboBoxItem Content="強発光 (Ultra)" Tag="ultra"/>
+                                                <ComboBoxItem Content="ソフト発光" Tag="soft"/>
                                                 <ComboBoxItem Content="OFF (黒枠)" Tag="off"/>
                                             </ComboBox>
                                         </WrapPanel>
 
                                         <!-- 音 -->
-                                        <TextBlock Text="🔊 音" Style="{StaticResource SettingsHeader}"/>
+                                        <TextBlock Text="音" Style="{StaticResource SettingsHeader}"/>
                                         <WrapPanel>
                                             <TextBlock Text="音量" Style="{StaticResource SettingsLabel}" Margin="2,0,6,6"/>
                                             <ComboBox x:Name="AudioGainCombo" Width="110" Height="28" VerticalContentAlignment="Center"
@@ -1416,26 +1416,26 @@
                                                       Margin="0,0,6,6" SelectionChanged="AudioFxCombo_SelectionChanged"
                                                       ToolTip="Web Audio API によるリアルタイム音質イコライザー">
                                                 <ComboBoxItem Content="フラット (標準)" Tag="normal" IsSelected="True"/>
-                                                <ComboBoxItem Content="🎸 重低音強化" Tag="bass"/>
-                                                <ComboBoxItem Content="🎤 ボーカル明瞭" Tag="vocal"/>
-                                                <ComboBoxItem Content="🌙 夜間小音量用" Tag="night"/>
+                                                <ComboBoxItem Content="重低音強化" Tag="bass"/>
+                                                <ComboBoxItem Content="ボーカル明瞭" Tag="vocal"/>
+                                                <ComboBoxItem Content="夜間小音量用" Tag="night"/>
                                             </ComboBox>
                                         </WrapPanel>
 
                                         <!-- 弾幕 -->
-                                        <TextBlock Text="💬 弾幕コメント" Style="{StaticResource SettingsHeader}"/>
+                                        <TextBlock Text="弾幕コメント" Style="{StaticResource SettingsHeader}"/>
                                         <WrapPanel>
                                             <ComboBox x:Name="DanmakuStyleCombo" Width="160" Height="28" VerticalContentAlignment="Center"
                                                       Margin="0,0,8,0" SelectionChanged="DanmakuStyleCombo_SelectionChanged"
                                                       ToolTip="YouTubeコメント・Twitch/YouTubeライブチャットを画面上に横スクロール表示">
-                                                <ComboBoxItem Content="💬 弾幕: 標準" Tag="normal" IsSelected="True"/>
-                                                <ComboBoxItem Content="🔥 弾幕: 大きめ・濃密" Tag="bold"/>
-                                                <ComboBoxItem Content="🌙 弾幕: 控えめ・半透明" Tag="subtle"/>
-                                                <ComboBoxItem Content="🚫 弾幕: OFF" Tag="off"/>
+                                                <ComboBoxItem Content="弾幕: 標準" Tag="normal" IsSelected="True"/>
+                                                <ComboBoxItem Content="弾幕: 大きめ・濃密" Tag="bold"/>
+                                                <ComboBoxItem Content="弾幕: 控えめ・半透明" Tag="subtle"/>
+                                                <ComboBoxItem Content="弾幕: OFF" Tag="off"/>
                                             </ComboBox>
                                             <Border Background="#0FFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" CornerRadius="6"
                                                     Padding="8,4" VerticalAlignment="Center">
-                                                <TextBlock x:Name="DanmakuStatusText" Text="💬 自動同期: ON" Foreground="#94A3B8" FontSize="11"/>
+                                                <TextBlock x:Name="DanmakuStatusText" Text="自動同期: ON" Foreground="#94A3B8" FontSize="11"/>
                                             </Border>
                                         </WrapPanel>
                                     </StackPanel>
@@ -1466,7 +1466,7 @@
                                             <Image x:Name="AudioOnlyThumb" Stretch="UniformToFill"/>
                                         </Border>
                                         <Border Background="#1AFFFFFF" CornerRadius="12" Padding="12,4" HorizontalAlignment="Center" Margin="0,0,0,10">
-                                            <TextBlock Text="🎧 BGM・省電力モード再生中（映像オフ）" Foreground="#A5B4FC" FontSize="11.5" FontWeight="SemiBold"/>
+                                            <TextBlock Text="BGM・省電力モード再生中（映像オフ）" Foreground="#A5B4FC" FontSize="11.5" FontWeight="SemiBold"/>
                                         </Border>
                                         <TextBlock x:Name="AudioOnlyTitle" Text="再生中のタイトル" Foreground="White"
                                                    FontSize="16" FontWeight="Bold" TextWrapping="Wrap" TextAlignment="Center"
@@ -1481,7 +1481,7 @@
                                                     Click="PlayPauseButton_Click"/>
                                             <Button Content="⏭ 次へ" Style="{StaticResource ActionBtn}" Padding="14,8" Margin="4,0"
                                                     Click="NextTrackButton_Click"/>
-                                            <Button Content="🎬 映像を表示" Style="{StaticResource ActionBtn}" Padding="14,8" Margin="10,0,0,0"
+                                            <Button Content="映像を表示" Style="{StaticResource ActionBtn}" Padding="14,8" Margin="10,0,0,0"
                                                     Click="AudioOnlyToggle_Click"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -1505,12 +1505,12 @@
                                             <Button x:Name="BtnQueueCurrent" Content="⏭ 次に" Style="{StaticResource ActionBtn}"
                                                     Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Current"
                                                     ToolTip="次に再生：検索・一覧の続きと、視聴履歴をもとにしたおすすめ"/>
-                                            <Button x:Name="BtnQueueWatchLater" Content="🕒 後で" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnQueueWatchLater" Content="後で" Style="{StaticResource ActionBtn}"
                                                     Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="WatchLater"
                                                     ToolTip="後で見る"/>
                                             <Button x:Name="BtnQueueFavorites" Content="♥ お気に入り" Style="{StaticResource ActionBtn}"
                                                     Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Favorites"/>
-                                            <Button x:Name="BtnQueueComments" Content="💬 コメント" Style="{StaticResource ActionBtn}"
+                                            <Button x:Name="BtnQueueComments" Content="コメント" Style="{StaticResource ActionBtn}"
                                                     Margin="2" Padding="2,5" FontSize="11" Click="QueueTab_Click" Tag="Comments"
                                                     ToolTip="再生中の動画のコメントを一覧で見る"/>
                                         </UniformGrid>
@@ -1734,13 +1734,13 @@
 
                     <!-- 右：ワンクリック音質EQ・MV画面表示・停止 -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="BtnDockEqBass" Content="🎸 重低音" Style="{StaticResource ActionBtn}"
+                        <Button x:Name="BtnDockEqBass" Content="重低音" Style="{StaticResource ActionBtn}"
                                 Padding="9,5" Margin="0,0,5,0" Click="DockEqPreset_Click" Tag="bass"
                                 ToolTip="重低音強化イコライザー (ON/OFF)"/>
-                        <Button x:Name="BtnDockEqVocal" Content="🎤 ボーカル" Style="{StaticResource ActionBtn}"
+                        <Button x:Name="BtnDockEqVocal" Content="ボーカル" Style="{StaticResource ActionBtn}"
                                 Padding="9,5" Margin="0,0,10,0" Click="DockEqPreset_Click" Tag="vocal"
                                 ToolTip="ボーカル明瞭化イコライザー (ON/OFF)"/>
-                        <Button Content="🎬 MV画面を開く" Style="{StaticResource PrimaryBtn}"
+                        <Button Content="MV画面を開く" Style="{StaticResource PrimaryBtn}"
                                 Padding="12,5" Margin="0,0,6,0" Click="SwitchToPlayer_Click"
                                 ToolTip="アンビエントライト付きフルプレイヤー画面を表示"/>
                         <Button Content="✕" Style="{StaticResource ActionBtn}"

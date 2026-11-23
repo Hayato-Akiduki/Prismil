@@ -523,12 +523,12 @@ public partial class MainWindow : Window
                     var state = msg["ab_state:".Length..];
                     if (state == "OFF")
                     {
-                        BtnABRepeat.Content = "📍 A-B区間ループ: OFF";
+                        BtnABRepeat.Content = "A-B区間ループ: OFF";
                         BtnABRepeat.BorderBrush = NeutralBorderBrush;
                     }
                     else
                     {
-                        BtnABRepeat.Content = $"📍 {state}";
+                        BtnABRepeat.Content = $"{state}";
                         BtnABRepeat.BorderBrush = new SolidColorBrush(Color.FromRgb(236, 72, 153));
                     }
                 }
@@ -730,17 +730,17 @@ public partial class MainWindow : Window
     private static string FormatMusicStationTitle(string station)
     {
         if (string.IsNullOrEmpty(station))
-            return "🎧 Music & Radio Hub — 音楽・ラジオ・Podcast";
+            return "Music & Radio Hub — 音楽・ラジオ・Podcast";
         if (station.StartsWith("podcast:", StringComparison.OrdinalIgnoreCase))
-            return $"🎙 ポッドキャスト番組: {station["podcast:".Length..]}";
+            return $"ポッドキャスト番組: {station["podcast:".Length..]}";
         if (station.StartsWith("radio:", StringComparison.OrdinalIgnoreCase))
         {
             var tag = station["radio:".Length..];
             return tag.Equals("JP", StringComparison.OrdinalIgnoreCase)
-                ? "📻 日本のネットラジオ局 (24h LIVE)"
-                : $"📻 24時間ネットラジオ局: {tag.ToUpperInvariant()}";
+                ? "日本のネットラジオ局 (24h LIVE)"
+                : $"24時間ネットラジオ局: {tag.ToUpperInvariant()}";
         }
-        return $"🎧 ステーション: {station}";
+        return $"ステーション: {station}";
     }
 
     private async Task LoadMusicFeedAsync(string? stationKeyword = null)
@@ -1070,7 +1070,7 @@ public partial class MainWindow : Window
         else if (isCustomPlaylist && _activeCustomPlaylist != null)
         {
             source = _activeCustomPlaylist.Items;
-            headerTitle = $"📁 {_activeCustomPlaylist.Name}";
+            headerTitle = $"{_activeCustomPlaylist.Name}";
         }
         else if (isMusicMode)
         {
@@ -1080,17 +1080,17 @@ public partial class MainWindow : Window
         else if (NavSubscriptionsFeed.IsChecked == true)
         {
             source = _subscriptionFeedItems;
-            headerTitle = "📡 登録チャンネル新着タイムライン";
+            headerTitle = "登録チャンネル新着タイムライン";
         }
         else if (NavSearch.IsChecked == true)
         {
             source = _searchItems;
             headerTitle = _gachaTheme != null ? $"🎰 ガチャ結果「{_gachaTheme}」"
                 : string.IsNullOrEmpty(_lastSearchQuery)
-                ? "🔍 横断検索結果"
+                ? "横断検索結果"
                 : _searchSite is SiteType ss && _lastSearchQuery == _searchKeyword
-                    ? $"🔍 「{_lastSearchQuery}」の{SiteLabel(ss)}検索結果"
-                    : $"🔍 「{_lastSearchQuery}」の横断検索結果";
+                    ? $"「{_lastSearchQuery}」の{SiteLabel(ss)}検索結果"
+                    : $"「{_lastSearchQuery}」の横断検索結果";
         }
         else if (NavFavorites.IsChecked == true)
         {
@@ -1100,12 +1100,12 @@ public partial class MainWindow : Window
         else if (NavWatchLater.IsChecked == true)
         {
             source = _libraryService.WatchLater;
-            headerTitle = "🕒 後で見るリスト";
+            headerTitle = "後で見るリスト";
         }
         else if (NavHistory.IsChecked == true)
         {
             source = _libraryService.History;
-            headerTitle = "📜 視聴履歴";
+            headerTitle = "視聴履歴";
             showClearHistory = _libraryService.History.Count > 0;
         }
         else
@@ -1113,8 +1113,8 @@ public partial class MainWindow : Window
             source = _discoverItems;
             headerTitle = _homeSite is SiteType hs
                 ? string.IsNullOrEmpty(_lastTopicKeyword)
-                    ? $"🔥 {SiteLabel(hs)} のおすすめ"
-                    : $"🔥 トピック: {_lastTopicKeyword}（{SiteLabel(hs)}）"
+                    ? $"{SiteLabel(hs)} のおすすめ"
+                    : $"トピック: {_lastTopicKeyword}（{SiteLabel(hs)}）"
                 : string.IsNullOrEmpty(_lastTopicKeyword)
                     ? "🔥 5サイト横断トレンド"
                     : $"🔥 トピック: {_lastTopicKeyword}";
@@ -1514,7 +1514,7 @@ public partial class MainWindow : Window
         RefreshSideQueue();
 
         // 新しい動画を開いた時はA-B区間をリセット
-        BtnABRepeat.Content = "📍 A-B区間ループ: OFF";
+        BtnABRepeat.Content = "A-B区間ループ: OFF";
         BtnABRepeat.BorderBrush = NeutralBorderBrush;
         if (_isWebViewReady && PlayerWebView.CoreWebView2 != null)
         {
@@ -1526,14 +1526,14 @@ public partial class MainWindow : Window
         {
             AudioOnlyOverlay.Visibility = Visibility.Visible;
             PlayerWebView.Visibility = Visibility.Hidden;
-            BtnAudioOnlyToggle.Content = "🎧 BGM: ON";
+            BtnAudioOnlyToggle.Content = "BGM: ON";
             BtnAudioOnlyToggle.BorderBrush = new SolidColorBrush(Color.FromRgb(99, 102, 241));
         }
         else if (!_isAudioOnlyMode)
         {
             AudioOnlyOverlay.Visibility = Visibility.Collapsed;
             PlayerWebView.Visibility = Visibility.Visible;
-            BtnAudioOnlyToggle.Content = "🎧 BGMモード";
+            BtnAudioOnlyToggle.Content = "BGMモード";
             BtnAudioOnlyToggle.BorderBrush = NeutralBorderBrush;
         }
 
@@ -1576,31 +1576,31 @@ public partial class MainWindow : Window
 
             if (item.Site == SiteType.YouTube)
             {
-                DanmakuStatusText.Text = "💬 YouTubeコメント取得中...";
+                DanmakuStatusText.Text = "YouTubeコメント取得中...";
                 var ytComments = await _commentService.GetYouTubeDanmakuAsync(item.Id, item.DurationSeconds, count =>
                 {
                     if (_currentPlayingItem?.UniqueKey == item.UniqueKey)
-                        DanmakuStatusText.Text = $"💬 コメント取得中... {count}件";
+                        DanmakuStatusText.Text = $"コメント取得中... {count}件";
                 });
                 if (_currentPlayingItem?.UniqueKey != item.UniqueKey) return;
                 combined.AddRange(ytComments);
 
                 int timed = combined.Count(c => c.TimeSeconds >= 0);
                 DanmakuStatusText.Text = combined.Count > 0
-                    ? $"💬 {combined.Count}件を1回ずつ表示（時間指定 {timed}件）"
-                    : "💬 ライブチャット連動中";
+                    ? $"{combined.Count}件を1回ずつ表示（時間指定 {timed}件）"
+                    : "ライブチャット連動中";
             }
             else if (item.Site == SiteType.Twitch || item.Site == SiteType.Abema)
             {
-                DanmakuStatusText.Text = "🔴 LIVEチャット自動弾幕連動中";
+                DanmakuStatusText.Text = "LIVEチャット自動弾幕連動中";
             }
             else if (item.Site == SiteType.Niconico || item.Site == SiteType.Bilibili)
             {
-                DanmakuStatusText.Text = "📺 公式コメント表示中";
+                DanmakuStatusText.Text = "公式コメント表示中";
             }
             else
             {
-                DanmakuStatusText.Text = "💬 コメントなし";
+                DanmakuStatusText.Text = "コメントなし";
             }
 
             var payload = combined.Select(c => new
@@ -1616,7 +1616,7 @@ public partial class MainWindow : Window
         }
         catch
         {
-            DanmakuStatusText.Text = "💬 弾幕スタンバイ";
+            DanmakuStatusText.Text = "弾幕スタンバイ";
         }
     }
 
@@ -1731,7 +1731,7 @@ public partial class MainWindow : Window
         PlayerView.Visibility = Visibility.Visible;
         NowPlayingMiniCard.Visibility = Visibility.Collapsed;
         MusicPlayerDockBar.Visibility = Visibility.Collapsed;
-        BtnToggleViewMode.Content = "🗂 一覧へ";
+        BtnToggleViewMode.Content = "一覧へ";
     }
 
     private void SwitchToCardBrowserView()
@@ -1743,7 +1743,7 @@ public partial class MainWindow : Window
         StatsDashboardView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Collapsed;
         CardBrowserView.Visibility = Visibility.Visible;
-        BtnToggleViewMode.Content = "🎬 プレイヤー";
+        BtnToggleViewMode.Content = "プレイヤー";
 
         if (_currentPlayingItem != null)
         {
@@ -1761,7 +1761,7 @@ public partial class MainWindow : Window
         CardBrowserView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Collapsed;
         StatsDashboardView.Visibility = Visibility.Visible;
-        BtnToggleViewMode.Content = "🎬 プレイヤー";
+        BtnToggleViewMode.Content = "プレイヤー";
 
         if (_currentPlayingItem != null)
         {
@@ -1936,14 +1936,14 @@ public partial class MainWindow : Window
         {
             AudioOnlyOverlay.Visibility = Visibility.Visible;
             PlayerWebView.Visibility = Visibility.Hidden;
-            BtnAudioOnlyToggle.Content = "🎧 BGM: ON";
+            BtnAudioOnlyToggle.Content = "BGM: ON";
             BtnAudioOnlyToggle.BorderBrush = new SolidColorBrush(Color.FromRgb(99, 102, 241));
         }
         else
         {
             AudioOnlyOverlay.Visibility = Visibility.Collapsed;
             PlayerWebView.Visibility = Visibility.Visible;
-            BtnAudioOnlyToggle.Content = "🎧 BGMモード";
+            BtnAudioOnlyToggle.Content = "BGMモード";
             BtnAudioOnlyToggle.BorderBrush = NeutralBorderBrush;
         }
     }
@@ -2157,7 +2157,7 @@ public partial class MainWindow : Window
         CardBrowserView.Visibility = Visibility.Collapsed;
         StatsDashboardView.Visibility = Visibility.Collapsed;
         SettingsView.Visibility = Visibility.Visible;
-        BtnToggleViewMode.Content = "🎬 プレイヤー";
+        BtnToggleViewMode.Content = "プレイヤー";
         if (_currentPlayingItem != null)
         {
             NowPlayingMiniCard.Visibility = Visibility.Visible;
@@ -2293,8 +2293,8 @@ public partial class MainWindow : Window
     {
         _isMusicBgListen = !_isMusicBgListen;
         BtnMusicBgListenToggle.Content = _isMusicBgListen
-            ? "🎧 クリック時は下部バーでBGM再生: ON"
-            : "🎬 クリック時はMVプレイヤー画面を開く";
+            ? "クリック時は下部バーでBGM再生: ON"
+            : "クリック時はMVプレイヤー画面を開く";
         BtnMusicBgListenToggle.BorderBrush = _isMusicBgListen
             ? new SolidColorBrush(Color.FromRgb(236, 72, 153))
             : new SolidColorBrush(Color.FromRgb(99, 102, 241));
@@ -3229,10 +3229,10 @@ public partial class MainWindow : Window
 
         var durationRows = new[]
         {
-            new { Label = "📱 ショート (〜1分)", Detail = $"{shortCount} 本", Percentage = combined.Count == 0 ? 0 : shortCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(244, 114, 182)) },
-            new { Label = "🎵 MV・短編 (1〜10分)", Detail = $"{mvCount} 本", Percentage = combined.Count == 0 ? 0 : mvCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(99, 102, 241)) },
-            new { Label = "🎬 企画・アニメ (10〜30分)", Detail = $"{midCount} 本", Percentage = combined.Count == 0 ? 0 : midCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(56, 189, 248)) },
-            new { Label = "📡 長尺・生配信 (30分〜/LIVE)", Detail = $"{longOrLiveCount} 本", Percentage = combined.Count == 0 ? 0 : longOrLiveCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(52, 211, 153)) }
+            new { Label = "ショート (〜1分)", Detail = $"{shortCount} 本", Percentage = combined.Count == 0 ? 0 : shortCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(244, 114, 182)) },
+            new { Label = "MV・短編 (1〜10分)", Detail = $"{mvCount} 本", Percentage = combined.Count == 0 ? 0 : mvCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(99, 102, 241)) },
+            new { Label = "企画・アニメ (10〜30分)", Detail = $"{midCount} 本", Percentage = combined.Count == 0 ? 0 : midCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(56, 189, 248)) },
+            new { Label = "長尺・生配信 (30分〜/LIVE)", Detail = $"{longOrLiveCount} 本", Percentage = combined.Count == 0 ? 0 : longOrLiveCount * 100.0 / totalCount, BarBrush = (Brush)new SolidColorBrush(Color.FromRgb(52, 211, 153)) }
         };
         DurationStatsItemsControl.ItemsSource = durationRows;
     }
@@ -3373,7 +3373,7 @@ public partial class MainWindow : Window
             await PlayerWebView.CoreWebView2.Profile.ClearBrowsingDataAsync();
             BtnClearCookies.Content = "✓ 消去完了";
             await Task.Delay(1800);
-            BtnClearCookies.Content = "🧹 Cookie消去";
+            BtnClearCookies.Content = "Cookie消去";
         }
         catch { }
     }
@@ -3579,7 +3579,7 @@ public partial class MainWindow : Window
         if (enable) SwitchToPlayerView();
         ApplyPlayerLayout();
 
-        BtnTheaterMode.Content = "🎭 シアター"; // 幅が変わらないよう文字は同じ。ON の時は枠の色で示す
+        BtnTheaterMode.Content = "シアター"; // 幅が変わらないよう文字は同じ。ON の時は枠の色で示す
         BtnTheaterMode.BorderBrush = enable ? new SolidColorBrush(Color.FromRgb(99, 102, 241)) : NeutralBorderBrush;
     }
 
